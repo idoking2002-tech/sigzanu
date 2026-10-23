@@ -410,6 +410,8 @@ function onMsg(m) {
   } else if (m.type === 'error') {
     toast(m.msg);
     if (m.code === 'noroom' && session) { session = null; store.set(SKEY, null); history.replaceState(null, '', '/'); screen = 'join'; render(); }
+  } else if (m.type === 'toast') {
+    toast(m.msg);
   } else if (m.type === 'kicked') {
     toast(m.msg); leaveLocal();
   } else if (m.type === 'stroke') { cv.add(m); }

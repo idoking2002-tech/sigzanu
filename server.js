@@ -288,8 +288,25 @@ wss.on('connection', ws => {
     let msg; try { msg = JSON.parse(raw); } catch (e) { return; }
     try { handle(ws, msg); } catch (e) { console.error('handle error', e); }
   });
-  ws.on('close', () => { if (ws.room && rooms.has(ws.room.code)) broadcast(ws.room); });
+  ws.on('close', () => {
+    const room = ws.room; if (!room || !rooms.has(room.code)) return;
+    const p = P(room, ws.pid); if (p && p.ws === ws) p.offAt = Date.now();
+    broadcast(room);
+  });
 });
+
+// a host whose phone dropped for 20s hands the room to someone connected, so nobody gets stuck
+const HOST_GRACE = 20e3;
+setInterval(() => {
+  const now = Date.now();
+  for (const room of rooms.values()) {
+    const host = P(room, room.hostId);
+    if (host && isOn(host)) continue;
+    if (host && now - (host.offAt || now) < HOST_GRACE) continue;
+    const next = room.players.find(isOn);
+    if (next && next.id !== room.hostId) { room.hostId = next.id; broadcast(room); for (const p of room.players) send(p.ws, { type: 'toast', msg: `${next.name} הוא/היא המארח/ת עכשיו` }); }
+  }
+}, 5e3);
 
 // keepalive pings + cleanup of idle rooms
 setInterval(() => {

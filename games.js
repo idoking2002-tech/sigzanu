@@ -652,7 +652,7 @@ G.stash = {
 const REACTS = [['fire', '🔥', 3], ['lol', '🤣', 2], ['meh', '😐', 1], ['poop', '💩', 0]];
 G.meme = {
   id: 'meme', name: 'מפעל הממים', icon: '😂', min: 3, max: 14,
-  start(ctx) { return { phase: 'write', round: 1, rounds: 3, prompts: shuffle(C.MEME_PROMPTS), caps: {}, votes: {}, capOrder: [], pts: Object.fromEntries(ctx.ids.map(i => [i, 0])), last: {}, order: ctx.ids.slice() }; },
+  start(ctx) { return { phase: 'write', round: 1, rounds: 3, prompts: shuffle(C.MEME_PROMPTS), caps: {}, votes: {}, capOrder: [], capKey: {}, pts: Object.fromEntries(ctx.ids.map(i => [i, 0])), last: {}, order: ctx.ids.slice() }; },
   view(ctx, pid) {
     const s = ctx.g.s, [emo, sit] = s.prompts[(s.round - 1) % s.prompts.length];
     const scene = { t: 'meme', emoji: emo, text: sit };
@@ -660,12 +660,18 @@ G.meme = {
     if (s.phase === 'write') return { blocks: [say('כתבו את הכיתוב הכי מצחיק לסצנה. אחר כך כולם מדרגים בלי לדעת מי כתב.'), text(`סבב ${s.round} מתוך ${s.rounds}`, true), scene,
       s.caps[pid] ? text(`כתבת: "${s.caps[pid]}". מחכים לשאר…`, true) : { t: 'input', act: 'cap', placeholder: 'הכיתוב שלך', button: 'שליחה', max: 60 }, scores] };
     if (s.phase === 'vote') return { blocks: [say('דרגו כל כיתוב: 🔥 3 נק׳, 🤣 2, 😐 1, 💩 0'), scene,
-      { t: 'react', act: 'react', options: REACTS.map(([k, e]) => ({ k, e })), items: s.capOrder.map(id => ({ id, text: s.caps[id], mine: id === pid, picked: (s.votes[pid] || {})[id] })) }, scores] };
+      { t: 'react', act: 'react', options: REACTS.map(([k, e]) => ({ k, e })), items: s.capOrder.map(id => ({ id: this.capId(s, id), text: s.caps[id], mine: id === pid, picked: (s.votes[pid] || {})[id] })) }, scores] };
     return { blocks: [say('הנה מי כתב מה:'), scene,
       { t: 'list', items: s.capOrder.slice().sort((a, b) => s.last[b] - s.last[a]).map(id => ({ name: `${ctx.name(id)} +${s.last[id]}`, color: ctx.p(id).color, text: s.caps[id] })) },
       scores, hostNext(ctx, pid, s.round < s.rounds ? 'לסבב הבא ▶' : 'לתוצאות 🏁')] };
   },
-  toVote(s) { s.capOrder = shuffle(Object.keys(s.caps)); s.votes = {}; s.phase = s.capOrder.length ? 'vote' : 'reveal'; if (!s.capOrder.length) s.last = {}; },
+  // captions are rated anonymously: phones get an opaque caption id, never the author's player id
+  capId(s, author) { return s.capKey[author]; },
+  toVote(s) {
+    s.capOrder = shuffle(Object.keys(s.caps)); s.votes = {};
+    s.capKey = Object.fromEntries(s.capOrder.map((id, i) => [id, `c${s.round}_${i}`]));
+    s.phase = s.capOrder.length ? 'vote' : 'reveal'; if (!s.capOrder.length) s.last = {};
+  },
   allVoted(s) { return s.order.every(v => s.capOrder.every(c => c === v || (s.votes[v] || {})[c])); },
   score(s) {
     s.last = Object.fromEntries(s.capOrder.map(id => [id, 0]));
@@ -679,8 +685,10 @@ G.meme = {
       const t = cut(m.value, 60); if (!t) return;
       s.caps[pid] = t;
       if (s.order.every(id => s.caps[id])) this.toVote(s);
-    } else if (s.phase === 'vote' && m.act === 'react' && s.capOrder.includes(m.id) && m.id !== pid && REACTS.some(r => r[0] === m.k)) {
-      (s.votes[pid] = s.votes[pid] || {})[m.id] = m.k;
+    } else if (s.phase === 'vote' && m.act === 'react' && REACTS.some(r => r[0] === m.k)) {
+      const author = s.capOrder.find(id => s.capKey[id] === m.id);
+      if (!author || author === pid) return;
+      (s.votes[pid] = s.votes[pid] || {})[author] = m.k;
       if (this.allVoted(s)) this.score(s);
     } else if (s.phase === 'reveal' && m.act === 'next' && ctx.isHost(pid)) {
       if (s.round >= s.rounds) return ctx.finish(rankAward(s.pts), 'מפעל הממים נסגר להערב! הנה הקומיקאים:');
