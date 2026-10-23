@@ -1,0 +1,724 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#121110">
+<title>SIGAZNU</title>
+<meta name="description" content="SIGAZNU - ערב משחקי חברה בעברית לטלפון. פותחים חדר, החברים נכנסים עם קוד, משחקים וצוברים נקודות עד שיש אלוף אחד.">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Karantina:wght@700&family=Rubik:wght@500;600;700&family=Assistant:wght@400;600;700&display=swap">
+<style>
+/* Layout: phone-first single column; smoky lounge at night — charcoal, ash grey, paper white, filter brown, one ember accent */
+:root{
+  color-scheme:dark;
+  --bg:#121110; --bg2:#1a1816; --card:#23201d; --card2:#2b2723; --line:#38332d;
+  --fg:#f2ede6; --muted:#a39b91; --paper:#f2ede6; --tan:#c8955a; --brown:#8b5e3c; --ash:#8a847d; --ember:#e8673a;
+  --ok:#8fb39a; --bad:#d46a6a;
+  --poster:"Karantina","Rubik",system-ui,sans-serif;
+  --ui:"Rubik","Assistant",system-ui,sans-serif;
+  --body:"Assistant",system-ui,sans-serif;
+  --r:18px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg)}
+body{font-family:var(--body);font-size:16px;line-height:1.55;overflow-x:hidden;min-height:100vh;
+  background:radial-gradient(80% 50% at 85% -5%,#3a2c2122 0%,transparent 70%),radial-gradient(70% 40% at 0% 20%,#ffffff08 0%,transparent 70%),var(--bg);
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:1040px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{margin:0;line-height:1.05;text-wrap:balance}
+p{margin:0}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none;padding:0}
+button:focus-visible,input:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid var(--tan);outline-offset:3px;border-radius:10px}
+input{font:inherit}
+.muted{color:var(--muted)}
+.logo{font-family:var(--poster);font-size:34px;letter-spacing:2px;direction:ltr;display:inline-flex;align-items:center;gap:8px;color:var(--paper);line-height:1}
+.logo .stick{display:inline-block;width:30px;height:7px;border-radius:2px;background:linear-gradient(90deg,var(--tan) 0 32%,var(--paper) 32% 90%,var(--ember) 90%);box-shadow:0 0 10px #e8673a66}
+
+/* header */
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:#121110e8;backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:14px;padding-block:10px}
+.nav{display:flex;gap:20px;margin-inline-start:auto;font-family:var(--ui);font-weight:600;font-size:15px}
+.nav a{color:var(--fg);text-decoration:none;opacity:.85}
+.burger{display:none;margin-inline-start:auto;width:42px;height:42px;border-radius:12px;border:1px solid var(--line);font-size:20px}
+.menu{display:grid;padding-block:4px 12px}
+.menu a{padding:12px 2px;color:var(--fg);text-decoration:none;font-family:var(--ui);font-weight:600;border-bottom:1px solid var(--line)}
+@media (max-width:760px){.nav,.top .btn{display:none}.burger{display:grid;place-items:center}}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;font-family:var(--ui);font-weight:600;border-radius:14px;padding:14px 22px;font-size:18px;transition:transform .1s,box-shadow .1s;text-align:center}
+.btn:active{transform:translateY(3px)}
+.btn-main{background:var(--paper);color:#1a1816;box-shadow:0 5px 0 #b9ab98}
+.btn-main:active{box-shadow:0 2px 0 #b9ab98}
+.btn-tan{background:var(--tan);color:#1a1816;box-shadow:0 5px 0 var(--brown)}
+.btn-ember{background:var(--ember);color:#1a1816;box-shadow:0 5px 0 #a3421f}
+.btn-ghost{background:var(--card);border:1px solid var(--line)}
+.btn-sm{padding:9px 14px;font-size:15px;border-radius:12px}
+.btn-block{width:100%}
+.btn[disabled]{opacity:.35;pointer-events:none}
+
+/* hero */
+.hero{display:grid;grid-template-columns:1.15fr .85fr;gap:24px;align-items:center;padding-block:34px 26px}
+.eyebrow{color:var(--tan);font-family:var(--ui);font-weight:600;font-size:15px;letter-spacing:.3px}
+.hero h1{font-family:var(--poster);font-size:clamp(64px,15vw,118px);font-weight:700;line-height:.88;margin-block:12px 18px;letter-spacing:.5px}
+.hero h1 .l2{color:var(--ash)}
+.hero h1 .l3{color:var(--tan)}
+.lead{font-size:18px;color:var(--muted);max-width:52ch}
+.cta-stack{display:grid;gap:12px;margin-top:22px;max-width:440px}
+.join{border:1px solid var(--line);background:var(--bg2);border-radius:14px}
+.join summary{list-style:none;display:flex;align-items:center;gap:10px;padding:14px 16px;font-family:var(--ui);font-weight:600;cursor:pointer}
+.join summary::-webkit-details-marker{display:none}
+.join summary .chev{margin-inline-start:auto;transition:transform .2s}
+.join[open] summary .chev{transform:rotate(180deg)}
+.join form{display:flex;gap:8px;padding:0 12px 12px}
+.codein{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px 12px;color:var(--fg);letter-spacing:6px;text-align:center;text-transform:uppercase;font-family:var(--ui);font-weight:700;direction:ltr}
+.checks{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:14px;font-family:var(--ui);font-weight:500;font-size:14px;color:var(--muted)}
+.checks span::before{content:"✓";color:var(--tan);margin-inline-end:6px}
+.stage{position:relative;display:grid;place-items:center;aspect-ratio:1/1.05;max-width:100%}
+.stage .spot{position:absolute;inset:6% 10% 0;border-radius:50%;background:radial-gradient(circle at 50% 45%,#f2ede614,transparent 62%)}
+.stage .floor{position:absolute;bottom:6%;width:70%;height:12%;border-radius:50%;background:radial-gradient(#8b5e3c44,transparent 70%)}
+.chip{position:absolute;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:7px 11px;font-family:var(--ui);font-weight:600;font-size:13px;box-shadow:0 10px 24px #0007;white-space:nowrap}
+@media (max-width:760px){.hero{grid-template-columns:1fr;padding-top:16px}.stage{order:-1;width:min(290px,78%);margin:0 auto}}
+
+/* sigi */
+.sigi{display:block;width:100%;height:auto;overflow:visible}
+.sigi .smoke{animation:drift 4s ease-in-out infinite;transform-origin:60px 30px}
+.sigi .ember{animation:glow 2.4s ease-in-out infinite}
+@keyframes drift{50%{transform:translate(3px,-4px) scale(1.05);opacity:.5}}
+@keyframes glow{50%{opacity:.75}}
+
+/* sections */
+section.block{padding-block:40px}
+.sec-head{display:flex;align-items:end;gap:12px;margin-bottom:16px}
+.sec-head h2{font-family:var(--poster);font-size:clamp(44px,9vw,64px);font-weight:700;letter-spacing:.5px}
+.sec-head .more{margin-inline-start:auto;color:var(--tan);font-family:var(--ui);font-weight:600;text-decoration:none;white-space:nowrap}
+.trio{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;border-block:1px solid var(--line);padding-block:18px}
+.trio div{display:flex;gap:12px;align-items:center}
+.trio i{flex:none;width:46px;height:46px;border-radius:12px;display:grid;place-items:center;font-style:normal;font-size:22px;background:var(--card)}
+.trio b{display:block;font-family:var(--ui);font-weight:600;font-size:17px}
+.trio small{color:var(--muted);font-size:14px}
+@media (max-width:640px){.trio{grid-template-columns:1fr}}
+.rail{display:flex;gap:12px;overflow-x:auto;padding-bottom:10px;scroll-snap-type:x mandatory}
+.rail::-webkit-scrollbar{height:6px}.rail::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px}
+.gtile{flex:none;width:148px;scroll-snap-align:start;border-radius:16px;padding:12px;background:var(--card);border:1px solid var(--line);text-align:start;display:grid;gap:8px}
+.gtile .art{aspect-ratio:1;border-radius:12px;display:grid;place-items:center;font-size:50px;background:var(--card2);max-width:100%}
+.gtile b{font-family:var(--ui);font-weight:600;font-size:16px}
+.gtile small{color:var(--muted);font-size:13px}
+.steps{display:grid;gap:12px;grid-template-columns:repeat(2,1fr);padding:0;margin:0;counter-reset:s}
+.steps li{list-style:none;background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:18px;counter-increment:s;display:grid;gap:6px}
+.steps li::before{content:counter(s);font-family:var(--poster);font-size:40px;line-height:1;color:var(--tan)}
+.steps h3{font-family:var(--ui);font-weight:600;font-size:19px}
+.steps p{color:var(--muted)}
+@media (max-width:640px){.steps{grid-template-columns:1fr}}
+.demo{background:var(--bg2);border:1px solid var(--line);border-radius:22px;padding:16px;display:grid;gap:8px;max-width:520px;margin-inline:auto;width:100%}
+.modes{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.modes div{background:var(--bg2);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:grid;gap:6px;align-content:start}
+.modes i{font-style:normal;font-size:28px}
+.modes b{font-family:var(--ui);font-weight:600;font-size:17px}
+.modes p{color:var(--muted);font-size:15px}
+@media (max-width:860px){.modes{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:420px){.modes{grid-template-columns:1fr}}
+.cat{margin-bottom:28px}
+.cat h3{font-family:var(--ui);font-weight:600;font-size:21px;margin-bottom:4px}
+.cat>p{color:var(--muted);margin-bottom:12px;max-width:60ch}
+.glist{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+.gcard{display:flex;gap:12px;align-items:flex-start;background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:12px}
+.gcard .art{flex:none;width:52px;height:52px;border-radius:12px;display:grid;place-items:center;font-size:28px;background:var(--card2)}
+.gcard div{min-width:0}
+.gcard b{font-family:var(--ui);font-weight:600;font-size:16px}
+.gcard p{font-size:14px;color:var(--muted)}
+.pl{font-size:13px;color:var(--tan);font-weight:700}
+.tag{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px;margin-inline-start:6px;vertical-align:middle;background:#ffffff10;color:var(--muted)}
+.tag.live{background:#8fb39a26;color:var(--ok)}
+.faq details{border-bottom:1px solid var(--line)}
+.faq summary{padding:16px 2px;font-family:var(--ui);font-weight:600;font-size:17px;cursor:pointer;list-style:none;display:flex;gap:10px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";margin-inline-start:auto;color:var(--tan);font-size:22px;line-height:1}
+.faq details[open] summary::after{content:"−"}
+.faq details p{padding:0 2px 16px;color:var(--muted);max-width:65ch}
+.final{text-align:center;display:grid;gap:12px;justify-items:center;background:var(--bg2);border-radius:26px;padding:30px 18px;border:1px solid var(--line)}
+.final h2{font-family:var(--poster);font-size:clamp(48px,10vw,72px)}
+footer{padding-block:26px;color:var(--muted);font-size:14px;display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+
+/* app screens */
+.screen{padding-block:14px 48px;display:grid;gap:14px;align-content:start;max-width:560px;margin:0 auto}
+.bar{display:flex;align-items:center;gap:10px;min-height:44px}
+.bar .back{color:var(--muted);font-family:var(--ui);font-weight:600;display:flex;gap:6px;align-items:center;padding:6px 0}
+.bar .spacer{flex:1}
+.bar .title{font-family:var(--ui);font-weight:600;font-size:17px}
+.codechip{font-family:var(--ui);font-weight:700;letter-spacing:3px;direction:ltr;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:4px 10px;font-size:14px}
+.hostbar{display:flex;gap:8px;flex-wrap:wrap}
+.say{display:flex;gap:10px;align-items:center}
+.say .face{flex:none;width:64px}
+.say .bubble{position:relative;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:11px 14px;font-weight:600;line-height:1.4;flex:1;min-width:0}
+.say .bubble::before{content:"";position:absolute;top:50%;right:-7px;width:12px;height:12px;background:var(--card);border-right:1px solid var(--line);border-top:1px solid var(--line);transform:translateY(-50%) rotate(45deg)}
+.say .bubble small{display:block;color:var(--tan);font-family:var(--ui);font-weight:600;font-size:12px;margin-bottom:2px}
+.panel{background:var(--bg2);border:1px solid var(--line);border-radius:20px;padding:16px;display:grid;gap:12px}
+.panel h2{font-family:var(--ui);font-weight:600;font-size:22px}
+.h{font-family:var(--ui);font-weight:600;font-size:17px;margin-top:4px}
+.field{display:flex;gap:8px}
+.txt{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px 14px;color:var(--fg);font-size:17px}
+.plist{display:grid;gap:6px}
+.prow{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:12px;padding:8px 12px;min-height:50px}
+.prow.me{box-shadow:inset 0 0 0 1px var(--tan)}
+.prow.off{opacity:.45}
+.av{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-family:var(--ui);font-weight:700;color:#1a1816;flex:none}
+.prow .nm{flex:1;min-width:0;font-weight:700;overflow-wrap:anywhere}
+.prow .nm small{display:block;color:var(--muted);font-weight:600;font-size:13px}
+.prow .rt{font-family:var(--ui);font-weight:700;font-size:20px;font-variant-numeric:tabular-nums}
+.prow .x{color:var(--muted);padding:6px 8px;font-size:14px}
+.pill{font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px;background:#ffffff10;color:var(--muted);white-space:nowrap}
+.pill.ok{background:#8fb39a26;color:var(--ok)}
+.pill.bad{background:#d46a6a26;color:var(--bad)}
+.pill.turn{background:#c8955a26;color:var(--tan)}
+.choices{display:grid;gap:8px}
+.choice{display:flex;align-items:center;gap:10px;background:var(--card);border:2px solid var(--line);border-radius:14px;padding:12px 14px;text-align:start;font-weight:700;font-size:17px;min-height:54px}
+.choice small{display:block;font-weight:600;color:var(--muted);font-size:13px}
+.choice.sel{border-color:var(--tan);background:#c8955a1f}
+.choice[disabled]{opacity:.4}
+.pickgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.pick{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;text-align:start;display:grid;gap:2px}
+.pick .art{font-size:30px}
+.pick b{font-family:var(--ui);font-weight:600;font-size:16px}
+.pick small{color:var(--muted);font-size:12px}
+.pick.off{opacity:.4}
+.big{font-family:var(--ui);font-weight:700;font-size:clamp(26px,7vw,36px);text-align:center;line-height:1.15;overflow-wrap:anywhere}
+.big small{display:block;font-family:var(--body);font-weight:600;font-size:15px;color:var(--muted);margin-top:4px}
+.secret{border-radius:20px;padding:22px 16px;text-align:center;display:grid;gap:6px;justify-items:center;min-height:150px;align-content:center;width:100%}
+.secret .t{color:var(--muted);font-weight:600;font-size:14px}
+.secret .w{font-family:var(--ui);font-weight:700;font-size:clamp(28px,8vw,40px);line-height:1.15;overflow-wrap:anywhere}
+.secret.word{background:var(--paper);color:#1a1816}
+.secret.word .t{color:#6b625a}
+.secret.imp{background:#3a1f16;border:2px solid var(--ember)}
+.secret.cover{background:repeating-linear-gradient(45deg,var(--card) 0 12px,var(--bg2) 12px 24px);border:1px dashed var(--line)}
+.timer{font-family:var(--poster);font-size:84px;line-height:.9;text-align:center;font-variant-numeric:tabular-nums}
+.timer.low{color:var(--ember)}
+.cards{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;min-height:70px;align-items:center}
+.pc{min-width:48px;height:68px;padding:0 6px;border-radius:9px;background:var(--paper);color:#1a1816;display:grid;place-items:center;font-family:var(--ui);font-size:24px;font-weight:700;box-shadow:0 4px 0 #0006;animation:pop .25s}
+.pc.small{min-width:42px;height:56px;font-size:18px}
+.pc.dup{background:var(--bad);color:#fff}
+@keyframes pop{from{transform:translateY(-12px) rotate(-6deg);opacity:0}}
+.list{display:grid;gap:6px}
+.li{display:flex;gap:8px;align-items:baseline;background:var(--card);border-radius:10px;padding:8px 12px}
+.li b{flex:none;max-width:45%;overflow-wrap:anywhere}
+.li span{min-width:0;overflow-wrap:anywhere}
+.li.ok{box-shadow:inset 0 0 0 1px var(--ok)}
+.dot{width:10px;height:10px;border-radius:50%;flex:none;align-self:center}
+.codebox{display:grid;gap:10px;justify-items:center;text-align:center;background:var(--card);border-radius:18px;padding:16px}
+.codebox .c{font-family:var(--ui);font-weight:700;font-size:48px;letter-spacing:10px;direction:ltr;line-height:1}
+.codebox .row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.bombart{font-size:96px;text-align:center;line-height:1}
+.bombart.live{animation:tick .45s infinite alternate}
+@keyframes tick{to{transform:scale(1.08) rotate(5deg)}}
+.boomart{font-size:110px;text-align:center;line-height:1;animation:pop .3s}
+.nightart{text-align:center;font-size:56px;line-height:1}
+.crown{text-align:center;display:grid;gap:6px;justify-items:center}
+.crown .names{font-family:var(--poster);font-size:clamp(56px,14vw,88px);line-height:.9;color:var(--tan)}
+.meme{background:var(--paper);color:#1a1816;border-radius:18px;padding:18px;text-align:center;display:grid;gap:8px}
+.meme .e{font-size:54px;line-height:1}
+.meme p{font-weight:700;font-size:18px}
+.react{display:grid;gap:10px}
+.rcard{background:var(--card);border-radius:14px;padding:12px;display:grid;gap:10px}
+.rcard p{font-weight:700;font-size:17px;overflow-wrap:anywhere}
+.rbtns{display:flex;gap:8px}
+.rbtns button{flex:1;font-size:26px;padding:8px 0;border-radius:12px;background:var(--bg2);border:2px solid var(--line)}
+.rbtns button.sel{border-color:var(--tan);background:#c8955a26}
+.slider{direction:ltr;display:grid;gap:10px}
+.slider .labels{display:flex;justify-content:space-between;font-family:var(--ui);font-weight:600;font-size:16px}
+.track{position:relative;height:54px;border-radius:14px;background:linear-gradient(90deg,#3a3f46,var(--card2) 50%,#4a3424);border:1px solid var(--line);overflow:hidden}
+.zone{position:absolute;top:0;bottom:0;transform:translateX(-50%)}
+.zone.z2{background:#c8955a33}.zone.z3{background:#c8955a55}.zone.z4{background:#e8673a99}
+.mark{position:absolute;top:6px;transform:translateX(-50%);display:grid;justify-items:center;font-size:11px;font-weight:700}
+.mark i{width:14px;height:14px;border-radius:50%;border:2px solid #1a1816}
+.slider input[type=range]{width:100%;accent-color:var(--tan);height:36px}
+.cvwrap{display:grid;gap:8px}
+.cvwrap canvas{width:100%;aspect-ratio:1;max-width:100%;background:#f2ede6;border-radius:16px;touch-action:none;display:block}
+.tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center;direction:ltr}
+.tools .sw{width:30px;height:30px;border-radius:50%;border:2px solid var(--line)}
+.tools .sw.sel{border-color:var(--paper);transform:scale(1.12)}
+.tools .wd{width:34px;height:30px;border-radius:8px;background:var(--card);display:grid;place-items:center}
+.tools .wd.sel{background:var(--card2);outline:2px solid var(--tan)}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--paper);color:#1a1816;font-weight:700;padding:12px 18px;border-radius:14px;z-index:30;max-width:calc(100% - 32px);text-align:center;box-shadow:0 10px 30px #000a}
+.netbar{position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0;z-index:20;background:var(--ember);color:#1a1816;text-align:center;font-weight:700;font-size:14px;padding:6px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function () {
+'use strict';
+const $ = s => document.querySelector(s);
+const app = $('#app');
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const store = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
+
+/* ---------- Sigi: the cigarette host ---------- */
+const sigi = () => `<svg class="sigi" viewBox="0 0 120 170" aria-hidden="true">
+  <ellipse cx="60" cy="163" rx="32" ry="4.5" fill="#000" opacity=".45"/>
+  <g class="smoke" fill="none" stroke="#bdb6ad" stroke-linecap="round" stroke-width="4" opacity=".75">
+    <path d="M54 26 C44 18 60 13 51 3"/><path d="M66 25 C76 17 62 11 71 1" stroke-width="3"/><path d="M60 24 C56 18 64 15 60 9" stroke-width="2.5"/>
+  </g>
+  <path d="M50 138 v15 M70 138 v15" stroke="#2a2522" stroke-width="5" stroke-linecap="round"/>
+  <ellipse cx="46" cy="155" rx="9" ry="5" fill="#6b4a32"/><ellipse cx="74" cy="155" rx="9" ry="5" fill="#6b4a32"/>
+  <path d="M38 80 C28 84 22 92 22 101" stroke="#2a2522" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+  <circle cx="22" cy="103" r="6" fill="#f2ede6" stroke="#2a2522" stroke-width="1.5"/>
+  <path d="M82 78 C92 74 97 66 98 58" stroke="#2a2522" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+  <rect x="94" y="44" width="9" height="20" rx="4" fill="#4a4540" transform="rotate(18 98 54)"/>
+  <circle cx="102" cy="42" r="8" fill="#8a847d"/><path d="M97 40 h10 M97 44 h10" stroke="#5c5650" stroke-width="1.4"/>
+  <circle cx="98" cy="60" r="6" fill="#f2ede6" stroke="#2a2522" stroke-width="1.5"/>
+  <rect x="38" y="34" width="44" height="74" rx="9" fill="#f2ede6"/>
+  <rect x="38" y="34" width="9" height="74" rx="4" fill="#ffffff" opacity=".5"/>
+  <path d="M38 103 h44 v27 a10 10 0 0 1 -10 10 h-24 a10 10 0 0 1 -10 -10 z" fill="#c8955a"/>
+  <g fill="#a8743f"><circle cx="48" cy="114" r="1.6"/><circle cx="58" cy="120" r="1.6"/><circle cx="70" cy="112" r="1.6"/><circle cx="75" cy="126" r="1.6"/><circle cx="50" cy="130" r="1.6"/><circle cx="64" cy="132" r="1.6"/></g>
+  <rect x="38" y="101" width="44" height="4" fill="#e3d2b8"/>
+  <rect x="38" y="28" width="44" height="12" rx="6" fill="#8a847d"/>
+  <ellipse class="ember" cx="60" cy="29" rx="21" ry="5.5" fill="#e8673a"/>
+  <ellipse cx="60" cy="29" rx="12" ry="3" fill="#ffb36b"/>
+  <path d="M46 56 q5 -4 10 0 M64 56 q5 -4 10 0" stroke="#2a2522" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <ellipse cx="51" cy="65" rx="4.5" ry="6" fill="#2a2522"/><ellipse cx="69" cy="65" rx="4.5" ry="6" fill="#2a2522"/>
+  <circle cx="52.5" cy="63" r="1.6" fill="#fff"/><circle cx="70.5" cy="63" r="1.6" fill="#fff"/>
+  <circle cx="45" cy="76" r="4" fill="#e8673a" opacity=".25"/><circle cx="75" cy="76" r="4" fill="#e8673a" opacity=".25"/>
+  <path d="M51 79 q9 9 18 0" stroke="#2a2522" stroke-width="3" fill="#8b3a2a" stroke-linejoin="round"/>
+</svg>`;
+
+/* ---------- catalog (homepage) ---------- */
+const GAMES = [
+  { id: 'seven', name: 'שבע בר מזל', icon: '🎰', min: 2, max: 10, cat: 'cards', d: 'מושכים קלפים ואוספים נקודות. מספר כפול שורף את הסבב, שבעה קלפים שונים שווים בונוס ענק.' },
+  { id: 'stash', name: 'אוצר או כלוב', icon: '💎', min: 3, max: 8, cat: 'cards', d: 'נכנסים למערה ואוספים יהלומים. כל אחד מחליט בסתר: להמשיך פנימה או לצאת עם השלל.' },
+  { id: 'imposter', name: 'המתחזה', icon: '🕵️', min: 3, max: 12, cat: 'bluff', d: 'כולם מקבלים את אותה מילה חוץ מאחד. רמז אחרי רמז, ואז מצביעים מי מזייף.' },
+  { id: 'village', name: 'הכפר בלילה', icon: '🌙', min: 5, max: 12, cat: 'bluff', d: 'רוצחים, רופאה ובלש. בלילה פועלים בסתר בטלפון, ביום מתווכחים ומצביעים מי יוצא.' },
+  { id: 'fake', name: 'עובדה או בדיה', icon: '🧐', min: 3, max: 12, cat: 'bluff', d: 'עובדה אמיתית עם חלק חסר. כותבים תשובה מזויפת ומשכנעת, ומנסים למצוא את האמת.' },
+  { id: 'mime', name: 'פנטומימה', icon: '🎭', min: 3, max: 16, cat: 'words', d: '60 שניות להציג כמה שיותר מילים בלי לדבר. מי שמנחש וגם המציג מקבלים נקודה.' },
+  { id: 'race', name: 'ספרינט מילים', icon: '⏱️', min: 4, max: 16, cat: 'words', d: 'האפורים נגד החומים. מסבירים מילה לקבוצה בלי להגיד אותה, 60 שניות לתור.' },
+  { id: 'scale', name: 'בין הקצוות', icon: '📏', min: 2, max: 12, cat: 'words', d: 'נקודה סודית על סקאלה בין שני הפכים. רמז אחד, וכולם מכוונים מהטלפון.' },
+  { id: 'draw', name: 'צייר ותנחש', icon: '🎨', min: 2, max: 12, cat: 'draw', d: 'אחד מצייר בשידור חי וכולם מנחשים מהטלפון. אותיות נחשפות עם הזמן.' },
+  { id: 'forger', name: 'הצייר המזויף', icon: '🖌️', min: 4, max: 10, cat: 'draw', d: 'כולם מוסיפים קו לאותו ציור, ואחד מהם בכלל לא יודע מה מציירים.' },
+  { id: 'bomb', name: 'פצצה מתקתקת', icon: '💣', min: 3, max: 12, cat: 'party', d: 'קטגוריה על המסך והפצצה עוברת מטלפון לטלפון. עונים מהר לפני שהיא מתפוצצת.' },
+  { id: 'meme', name: 'מפעל הממים', icon: '😂', min: 3, max: 14, cat: 'party', d: 'סצנה מצחיקה, כל אחד כותב כיתוב, והחדר מדרג בלי לדעת מי כתב.' },
+  { id: 'dare', name: 'אתגר מהכובע', icon: '🎩', min: 2, max: 20, cat: 'party', d: 'סיגי שולף אתגר מצחיק, ומי שמבצע מול כולם וקיבל אישור מהחדר מקבל נקודה.' },
+];
+const CATS = [
+  { id: 'cards', name: 'קלפים ומזל', d: 'כל החלטה היא הימור קטן: למשוך עוד, לעצור, או להעז.' },
+  { id: 'bluff', name: 'בלופים ותפקידים סודיים', d: 'מישהו פה משקר. התפקיד שלכם מופיע רק בטלפון שלכם.' },
+  { id: 'words', name: 'מילים ורמזים', d: 'מסבירים, מציגים ומנחשים, רק בלי להגיד את המילה עצמה.' },
+  { id: 'draw', name: 'ציור', d: 'לא צריך לדעת לצייר. צריך לדעת לנחש מהר.' },
+  { id: 'party', name: 'מסיבה וצחוקים', d: 'משחקים קלילים לקבוצות גדולות ולמי שרק הגיע.' },
+];
+const FAQ = [
+  ['מה זה SIGAZNU?', 'ערב משחקי חברה בעברית שרץ בדפדפן של הטלפון. פותחים חדר, החברים מצטרפים עם קוד, משחקים כמה משחקים ברצף וכל משחק מוסיף נקודות לטבלת הערב.'],
+  ['מי זה סיגי?', 'סיגי הוא המנחה. הוא מסביר את החוקים לפני כל משחק, סופר נקודות ומכריז על האלוף בסוף הערב.'],
+  ['איך מנצחים בערב?', 'כל משחק מחלק נקודות ערב: בדרך כלל מקום ראשון מקבל 3, שני 2 ושלישי 1. מי שמוביל בטבלה כשמסיימים הוא האלוף.'],
+  ['צריך להוריד משהו או להירשם?', 'לא. פותחים את האתר, כותבים שם ונכנסים. החברים נכנסים עם קוד בן 4 אותיות או עם הקישור.'],
+  ['כמה שחקנים צריך?', 'בין 2 ל־16, תלוי במשחק. ליד כל משחק כתוב כמה שחקנים הוא צריך.'],
+  ['אפשר לשחק מרחוק?', 'כן. כל אחד נכנס מהטלפון שלו עם הקוד, ומדברים בשיחה קולית או בווידאו משלכם.'],
+  ['מה קורה אם מישהו נותק?', 'נכנסים שוב מאותו טלפון וחוזרים בדיוק לאותו מקום. אם מישהו נעלם באמצע תור, למארח יש כפתור דילוג.'],
+];
+
+/* ---------- state ---------- */
+const SKEY = 'sigaznu.session';
+let session = store.get(SKEY) || null;        // {code, token, name}
+let token = (session && session.token) || store.get('sigaznu.token') || (Math.random().toString(36).slice(2) + Date.now().toString(36));
+store.set('sigaznu.token', token);
+let view = null, me = null, offset = 0;
+let screen = 'home', menuOpen = false, prefillCode = '';
+const revealed = {};
+let ws = null, wsReady = false, queue = [], retry = 0, wantConnected = false;
+
+const pathCode = location.pathname.replace(/\//g, '').toUpperCase();
+if (/^[A-Z]{4}$/.test(pathCode)) { prefillCode = pathCode; if (!session || session.code !== pathCode) screen = 'join'; }
+
+/* ---------- networking ---------- */
+function connect() {
+  wantConnected = true;
+  if (ws && (ws.readyState === 0 || ws.readyState === 1)) return;
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+  ws.onopen = () => {
+    wsReady = true; retry = 0; netbar(false);
+    if (session && session.code) ws.send(JSON.stringify({ type: 'join', code: session.code, name: session.name, token }));
+    queue.splice(0).forEach(m => ws.send(JSON.stringify(m)));
+  };
+  ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch (x) { return; } onMsg(m); };
+  ws.onclose = () => {
+    wsReady = false;
+    if (!wantConnected) return;
+    netbar(true);
+    setTimeout(connect, Math.min(8000, 500 * Math.pow(2, retry++)));
+  };
+}
+function send(m) { if (wsReady) ws.send(JSON.stringify(m)); else { queue.push(m); connect(); } }
+function netbar(on) {
+  let b = $('.netbar');
+  if (on && !b && screen === 'room') { b = document.createElement('div'); b.className = 'netbar'; b.textContent = 'החיבור נפל. מתחברים מחדש…'; document.body.appendChild(b); }
+  if (!on && b) b.remove();
+}
+function onMsg(m) {
+  if (m.type === 'joined') {
+    session = { code: m.code, token, name: (session && session.name) || pendingName };
+    store.set(SKEY, session); me = m.you; screen = 'room';
+    if (location.pathname !== '/' + m.code) history.replaceState(null, '', '/' + m.code);
+  } else if (m.type === 'view') {
+    offset = m.now - Date.now(); view = m.view; me = view.me;
+    if (screen !== 'room') screen = 'room';
+    render();
+  } else if (m.type === 'error') {
+    toast(m.msg);
+    if (m.code === 'noroom' && session) { session = null; store.set(SKEY, null); history.replaceState(null, '', '/'); screen = 'join'; render(); }
+  } else if (m.type === 'kicked') {
+    toast(m.msg); leaveLocal();
+  } else if (m.type === 'stroke') { cv.add(m); }
+  else if (m.type === 'strokes') { cv.replace(m.canvas, m.strokes); }
+}
+function leaveLocal() {
+  session = null; store.set(SKEY, null); view = null; screen = 'home';
+  history.replaceState(null, '', '/'); render();
+}
+let pendingName = '';
+
+/* ---------- toast ---------- */
+function toast(msg) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 2800); }
+
+/* ---------- render ---------- */
+function render() {
+  if (screen === 'room' && view) return renderRoom();
+  app.innerHTML = screen === 'create' ? createView() : screen === 'join' ? joinView() : home();
+  if (screen === 'home') animateDemo();
+}
+
+function header() {
+  return `<header class="top"><div class="wrap">
+    <span class="logo"><span class="stick"></span>SIGAZNU</span>
+    <nav class="nav"><a href="#how">איך משחקים</a><a href="#games">המשחקים</a><a href="#faq">שאלות נפוצות</a></nav>
+    <button class="btn btn-main btn-sm" data-go="create">▶ פתיחת חדר</button>
+    <button class="burger" data-go="menu" aria-label="תפריט">☰</button>
+  </div>${menuOpen ? `<div class="wrap menu"><a href="#how" data-go="menu">איך משחקים</a><a href="#games" data-go="menu">המשחקים</a><a href="#faq" data-go="menu">שאלות נפוצות</a><a href="#" data-go="join">הצטרפות עם קוד</a></div>` : ''}</header>`;
+}
+
+function home() {
+  const featured = ['seven', 'imposter', 'draw', 'bomb', 'village', 'mime', 'meme'].map(id => GAMES.find(g => g.id === id));
+  return header() + `<main class="wrap">
+  <section class="hero">
+    <div>
+      <div class="eyebrow">ערב משחקי חברה בעברית · לטלפון</div>
+      <h1>כולם בחדר.<br><span class="l2">משחק אחרי משחק.</span><br><span class="l3">אלוף אחד.</span></h1>
+      <p class="lead">SIGAZNU הוא ערב משחקים לחבר׳ה. פותחים חדר, כולם נכנסים עם קוד מהטלפון, משחקים כמה משחקים ברצף ואוספים נקודות. בסוף הלילה סיגי מכריז על אלוף אחד.</p>
+      <div class="cta-stack">
+        <button class="btn btn-main btn-block" data-go="create">▶ פתיחת חדר</button>
+        <details class="join"><summary>🔑 יש לכם קוד חדר? הצטרפו כאן <span class="chev">⌄</span></summary>
+          <form data-form="homejoin"><input class="codein" id="homecode" maxlength="4" placeholder="ABCD" aria-label="קוד חדר" autocomplete="off"><button class="btn btn-tan btn-sm">הצטרפות</button></form>
+        </details>
+      </div>
+      <div class="checks"><span>בלי הורדה</span><span>בלי הרשמה</span><span>בחינם</span><span>עד 16 שחקנים</span></div>
+    </div>
+    <div class="stage">
+      <div class="spot"></div><div class="floor"></div>
+      <div style="width:52%">${sigi()}</div>
+      <span class="chip" style="top:12%;right:0">🎰 שבע בר מזל</span>
+      <span class="chip" style="top:30%;left:0">🕵️ מי המתחזה?</span>
+      <span class="chip" style="bottom:22%;right:2%">💣 3…2…1</span>
+      <span class="chip" style="bottom:8%;left:6%">🏆 +3 נק׳</span>
+    </div>
+  </section>
+  <div class="trio">
+    <div><i>👥</i><span><b>מזמינים חברים</b><small>ביחד בסלון או מרחוק</small></span></div>
+    <div><i>🎮</i><span><b>משחקים וצוברים</b><small>${GAMES.length} משחקים, נקודות לכל משחק</small></span></div>
+    <div><i>🏆</i><span><b>מכתירים אלוף</b><small>בסוף הערב</small></span></div>
+  </div>
+  <section class="block">
+    <div class="sec-head"><h2>הכי משוחקים</h2><a class="more" href="#games">לכל המשחקים ←</a></div>
+    <div class="rail">${featured.map(g => `<button class="gtile" data-go="create"><span class="art">${g.icon}</span><b>${g.name}</b><small>${g.min}–${g.max} שחקנים</small></button>`).join('')}</div>
+  </section>
+  <section class="block" id="how">
+    <div class="sec-head"><h2>ערב שלם, לא סיבוב אחד</h2></div>
+    <ol class="steps">
+      <li><h3>פותחים חדר</h3><p>כותבים שם ומקבלים קוד של 4 אותיות. שולחים אותו או את הקישור בוואטסאפ, וכל אחד נכנס מהטלפון שלו.</p></li>
+      <li><h3>משחק אחרי משחק</h3><p>המארח בוחר משחק, סיגי מסביר את החוקים, וכל אחד רואה בטלפון רק את מה שמותר לו לראות.</p></li>
+      <li><h3>הנקודות נצברות</h3><p>כל משחק מחלק נקודות ערב. הטבלה נשמרת מהמשחק הראשון ועד האחרון.</p></li>
+      <li><h3>מכתירים אלוף</h3><p>מחליטים יחד מתי מסיימים. מי שבראש הטבלה לוקח את הערב.</p></li>
+    </ol>
+  </section>
+  <section class="block">
+    <div class="demo" aria-label="דוגמה לטבלת הערב"><div id="demoSay"></div><div class="plist" id="demoRows"></div></div>
+  </section>
+  <section class="block">
+    <div class="sec-head"><h2>משחקים איך שנוח לכם</h2></div>
+    <div class="modes">
+      <div><i>🛋️</i><b>כולם ביחד</b><p>כולם באותו חדר, כל אחד עם הטלפון שלו. הסודות נשארים בטלפון. <span class="tag live">זמין</span></p></div>
+      <div><i>🌍</i><b>מרחוק</b><p>כל אחד נכנס עם הקוד מהבית ומדברים בשיחה משלכם. <span class="tag live">זמין</span></p></div>
+      <div><i>📺</i><b>מסך גדול</b><p>טלוויזיה או מחשב כלוח משחק, והטלפונים הם השלט. <span class="tag">בקרוב</span></p></div>
+      <div><i>📱</i><b>טלפון אחד</b><p>מעבירים טלפון אחד מיד ליד עם מסך הסתרה. <span class="tag">בקרוב</span></p></div>
+    </div>
+  </section>
+  <section class="block" id="games">
+    <div class="sec-head"><h2>${GAMES.length} משחקי חברה בעברית</h2></div>
+    ${CATS.map(c => `<div class="cat"><h3>${c.name}</h3><p>${c.d}</p><div class="glist">${GAMES.filter(g => g.cat === c.id).map(g => `
+      <div class="gcard"><span class="art">${g.icon}</span><div><b>${g.name}</b><div class="pl">${g.min}–${g.max} שחקנים</div><p>${g.d}</p></div></div>`).join('')}</div></div>`).join('')}
+  </section>
+  <section class="block faq" id="faq">
+    <div class="sec-head"><h2>שאלות נפוצות</h2></div>
+    ${FAQ.map(([q, a]) => `<details><summary>${q}</summary><p>${a}</p></details>`).join('')}
+  </section>
+  <section class="block">
+    <div class="final"><div style="width:90px">${sigi()}</div><h2>מי לוקח את הערב?</h2><p class="muted">חדר חדש נפתח בשנייה. סיגי כבר מחכה.</p>
+      <button class="btn btn-main" data-go="create">▶ פתיחת חדר</button></div>
+  </section>
+  </main>
+  <footer class="wrap"><span class="logo" style="font-size:26px"><span class="stick"></span>SIGAZNU</span><span>© 2026</span></footer>`;
+}
+
+const DEMO = [
+  ['נועה פותחת חזק עם 3 נקודות בשבע בר מזל!', [['נועה', 3, '+3 בשבע בר מזל', '#e8c39e'], ['אורי', 2, '+2 בשבע בר מזל', '#9fb3a8'], ['תמר', 0, '', '#d9774a'], ['רון', 0, '', '#b7a6c9']]],
+  ['אורי תפס את המתחזה ועקף!', [['אורי', 5, '+3 בהמתחזה', '#9fb3a8'], ['נועה', 4, '+1 בהמתחזה', '#e8c39e'], ['תמר', 1, '+1 בהמתחזה', '#d9774a'], ['רון', 0, '', '#b7a6c9']]],
+  ['הפצצה התפוצצה אצל אורי. נועה חוזרת לראש!', [['נועה', 7, '+3 בפצצה', '#e8c39e'], ['אורי', 5, '', '#9fb3a8'], ['תמר', 3, '+2 בפצצה', '#d9774a'], ['רון', 1, '+1 בפצצה', '#b7a6c9']]],
+];
+let demoI = 0, demoT = null;
+function animateDemo() {
+  clearInterval(demoT);
+  const draw = () => {
+    const s = $('#demoSay'), r = $('#demoRows'); if (!s) { clearInterval(demoT); return; }
+    const [txt, rows] = DEMO[demoI++ % DEMO.length];
+    s.innerHTML = sayHTML(txt, 'ניקוד הערב · דוגמה');
+    r.innerHTML = rows.map(([n, p, sub, c], i) => `<div class="prow"><span class="muted" style="width:24px">#${i + 1}</span><span class="av" style="background:${c}">${n[0]}</span><span class="nm">${n}${sub ? `<small>${sub}</small>` : ''}</span><span class="rt">${p}</span></div>`).join('');
+  };
+  draw(); demoT = setInterval(draw, 3200);
+}
+
+const sayHTML = (text, label = 'סיגי · המנחה') => `<div class="say"><span class="face">${sigi()}</span><div class="bubble"><small>${esc(label)}</small>${esc(text)}</div></div>`;
+
+function createView() {
+  const name = (session && session.name) || store.get('sigaznu.name') || '';
+  return `<main class="wrap"><div class="screen">
+    <div class="bar"><button class="back" data-go="home">→ דף הבית</button><span class="spacer"></span><span class="logo" style="font-size:26px"><span class="stick"></span>SIGAZNU</span></div>
+    ${sayHTML('ערב טוב! אני סיגי, המנחה שלכם. איך להכריז עליך?')}
+    <div class="panel"><h2>פותחים חדר</h2><p class="muted">שם אחד ואתם בפנים. אחר כך שולחים לחברים את הקוד.</p>
+      <form data-form="create" class="field"><input class="txt" id="cname" maxlength="14" placeholder="השם שלך" value="${esc(name)}" autocomplete="off" aria-label="השם שלך"><button class="btn btn-main btn-sm">פתיחה</button></form>
+    </div></div></main>`;
+}
+function joinView() {
+  const name = store.get('sigaznu.name') || '';
+  return `<main class="wrap"><div class="screen">
+    <div class="bar"><button class="back" data-go="home">→ דף הבית</button><span class="spacer"></span><span class="logo" style="font-size:26px"><span class="stick"></span>SIGAZNU</span></div>
+    ${sayHTML('הגעתם לערב משחקים! הקלידו את הקוד ואת השם שלכם.')}
+    <div class="panel"><h2>הצטרפות לחדר</h2>
+      <form data-form="join" style="display:grid;gap:10px">
+        <input class="codein" style="font-size:28px;padding:12px" id="jcode" maxlength="4" placeholder="ABCD" value="${esc(prefillCode)}" autocomplete="off" aria-label="קוד חדר">
+        <input class="txt" id="jname" maxlength="14" placeholder="השם שלך" value="${esc(name)}" autocomplete="off" aria-label="השם שלך">
+        <button class="btn btn-main btn-block">כניסה לחדר</button>
+      </form></div></div></main>`;
+}
+
+/* ---------- room ---------- */
+function renderRoom() {
+  // keep typed text and focus across re-renders
+  const prevIn = document.querySelector('[data-input]');
+  const keep = prevIn ? { act: prevIn.dataset.input, value: prevIn.value, focus: document.activeElement === prevIn } : null;
+  const v = view;
+  const top = `<div class="bar">
+      ${v.screen === 'game' && v.host ? `<button class="back" data-act="quit">✕ ללובי</button>` : `<button class="back" data-go="leave">✕ יציאה</button>`}
+      <span class="spacer"></span><span class="title">${esc(v.title)}</span><span class="codechip">${esc(v.code)}</span></div>
+      ${v.canSkip ? `<div class="hostbar"><button class="btn btn-ghost btn-sm" data-act="skip">⏭ דילוג / המשך (מארח)</button></div>` : ''}`;
+  app.innerHTML = `<main class="wrap"><div class="screen">${top}${v.blocks.filter(Boolean).map(renderBlock).join('')}</div></main>`;
+  if (keep) {
+    const nin = document.querySelector(`[data-input="${keep.act}"]`);
+    if (nin && !justSent) { nin.value = keep.value; if (keep.focus) nin.focus(); }
+    else if (nin && keep.focus) nin.focus();
+  }
+  justSent = false;
+  const auto = document.querySelector('[data-autofocus]'); if (auto && !keep) auto.focus({ preventScroll: true });
+  cv.mount();
+  tickTimers();
+  if (v.blocks.some(b => b && b.t === 'boom')) buzz('boom' + v.title + JSON.stringify(v.blocks[1]));
+}
+let justSent = false;
+const buzzed = new Set();
+function buzz(key) { if (buzzed.has(key)) return; buzzed.add(key); try { navigator.vibrate && navigator.vibrate([200, 80, 300]); } catch (e) {} }
+
+const avatar = (name, color) => `<span class="av" style="background:${esc(color)}">${esc(String(name || '?').slice(0, 1))}</span>`;
+
+function renderBlock(b) {
+  switch (b.t) {
+    case 'say': return sayHTML(b.text);
+    case 'h': return `<div class="h">${esc(b.text)}</div>`;
+    case 'text': return `<p class="${b.muted ? 'muted' : ''}" style="text-align:center">${esc(b.text)}</p>`;
+    case 'big': return `<div class="big">${esc(b.text)}${b.sub ? `<small>${esc(b.sub)}</small>` : ''}</div>`;
+    case 'timer': return `<div class="timer" data-end="${b.end}">--</div>`;
+    case 'buttons': return `<div class="pickgrid" style="grid-template-columns:repeat(${Math.min(b.items.length, 2)},1fr)">${b.items.map(it =>
+      `<button class="btn btn-${it.style || 'main'}" data-act="${esc(it.act)}" ${it.disabled ? 'disabled' : ''}>${esc(it.label)}</button>`).join('')}</div>`;
+    case 'input': return `<form class="field" data-form="act" data-act="${esc(b.act)}"><input class="txt" data-input="${esc(b.act)}" maxlength="${b.max || 40}" placeholder="${esc(b.placeholder)}" autocomplete="off" enterkeyhint="send" ${b.focus ? 'data-autofocus' : ''}><button class="btn btn-main btn-sm">${esc(b.button || 'שליחה')}</button></form>`;
+    case 'choices': return `<div class="choices">${b.items.map(it => `<button class="choice ${b.selected === it.id ? 'sel' : ''}" data-act="${esc(b.act)}" data-id="${esc(it.id)}" ${it.disabled ? 'disabled' : ''}>
+      ${it.color ? avatar(it.name, it.color) : ''}<span>${esc(it.name)}${it.sub ? `<small>${esc(it.sub)}</small>` : ''}</span>${b.selected === it.id ? '<span style="margin-inline-start:auto">✔</span>' : ''}</button>`).join('')}</div>`;
+    case 'players': return `<div class="plist">${b.items.map((p, i) => `<div class="prow ${p.id === me ? 'me' : ''} ${p.off ? 'off' : ''}">
+      ${view.screen === 'lobby' || view.screen === 'end' ? `<span class="muted" style="width:24px">#${i + 1}</span>` : ''}${avatar(p.name, p.color)}
+      <span class="nm">${esc(p.name)}${p.host ? ' 👑' : ''}${p.id === me ? ' <span class="muted">(אני)</span>' : ''}${p.sub || p.off ? `<small>${p.off ? 'מנותק/ת' : esc(p.sub)}</small>` : ''}</span>
+      ${p.tag ? `<span class="pill ${esc(p.tone || '')}">${esc(p.tag)}</span>` : ''}
+      ${p.right !== undefined && p.right !== '' ? `<span class="rt">${esc(p.right)}</span>` : ''}
+      ${b.kick && p.id !== me ? `<button class="x" data-act="kick" data-id="${esc(p.id)}" aria-label="הוצאת ${esc(p.name)}">✕</button>` : ''}</div>`).join('')}</div>`;
+    case 'list': return b.items.length ? `<div class="list">${b.items.map(it => `<div class="li ${it.tone === 'ok' ? 'ok' : ''}"><span class="dot" style="background:${esc(it.color || '#888')}"></span><b>${esc(it.name)}</b><span>${esc(it.text)}</span></div>`).join('')}</div>` : '';
+    case 'cards': return `<div class="cards">${b.items.length ? b.items.map(c => `<span class="pc ${c.dup ? 'dup' : ''} ${c.small ? 'small' : ''}">${esc(c.v)}</span>`).join('') : `<span class="muted">${esc(b.empty || '')}</span>`}</div>`;
+    case 'secret': {
+      const key = (b.title || '') + '|' + b.text;
+      if (b.hidden && !revealed[key]) return `<button class="secret cover" data-reveal="${esc(key)}"><span class="t">${esc(b.title || '')}</span><span class="w" style="font-size:22px">👀 הקישו כדי לראות</span><span class="t">ודאו שאף אחד לא מציץ</span></button>`;
+      return `<div class="secret ${b.tone === 'imp' ? 'imp' : 'word'}" ${b.hidden ? `data-reveal="${esc(key)}" role="button" tabindex="0"` : ''}>${b.title ? `<span class="t">${esc(b.title)}</span>` : ''}<span class="w">${esc(b.text)}</span>${b.sub ? `<span class="t">${esc(b.sub)}</span>` : ''}${b.hidden ? '<span class="t">הקישו כדי להסתיר</span>' : ''}</div>`;
+    }
+    case 'code': {
+      const link = location.origin + '/' + b.code;
+      return `<div class="codebox"><span class="muted">קוד החדר</span><span class="c">${esc(b.code)}</span><span class="muted" style="direction:ltr;font-size:14px;overflow-wrap:anywhere">${esc(link)}</span>
+        <div class="row"><button class="btn btn-tan btn-sm" data-go="share">📤 שליחה לחברים</button><button class="btn btn-ghost btn-sm" data-go="copy">העתקת קישור</button></div></div>`;
+    }
+    case 'games': return `<div class="pickgrid">${b.items.map(g => { const ok = b.enabled && b.n >= g.min && b.n <= g.max;
+      return `<button class="pick ${ok ? '' : 'off'}" ${b.enabled ? `data-act="pick" data-id="${esc(g.id)}"` : ''} data-min="${g.min}" data-max="${g.max}" data-name="${esc(g.name)}"><span class="art">${g.icon}</span><b>${esc(g.name)}</b><small>${b.n < g.min ? `צריך לפחות ${g.min}` : b.n > g.max ? `עד ${g.max} שחקנים` : `${g.min}–${g.max} שחקנים`}</small></button>`; }).join('')}</div>`;
+    case 'crown': return `<div class="crown"><div style="width:110px">${sigi()}</div><span class="muted">סיגי מכריז: ${b.names.length > 1 ? 'האלופים של הערב' : 'האלוף של הערב'}</span><span class="names">${b.names.map(esc).join(' & ')}</span><span class="muted">${esc(b.sub)}</span></div>`;
+    case 'bomb': return `<div class="bombart ${b.live ? 'live' : ''}">💣</div>`;
+    case 'boom': return `<div class="boomart">💥</div>`;
+    case 'night': return b.on ? `<div class="nightart">🌙</div>` : '';
+    case 'meme': return `<div class="meme"><span class="e">${esc(b.emoji)}</span><p>${esc(b.text)}</p></div>`;
+    case 'react': return `<div class="react">${b.items.map(it => `<div class="rcard"><p>${esc(it.text)}</p>${it.mine ? '<span class="muted">הכיתוב שלך</span>' :
+      `<div class="rbtns">${b.options.map(o => `<button class="${it.picked === o.k ? 'sel' : ''}" data-act="${esc(b.act)}" data-id="${esc(it.id)}" data-k="${esc(o.k)}" aria-label="${esc(o.k)}">${o.e}</button>`).join('')}</div>`}</div>`).join('')}</div>`;
+    case 'slider': {
+      const zones = b.target != null ? [[40, 'z2'], [24, 'z3'], [10, 'z4']].map(([w, c]) => `<span class="zone ${c}" style="left:${b.target}%;width:${w}%"></span>`).join('') : '';
+      const marks = (b.marks || []).map(mk => `<span class="mark" style="left:${mk.v}%"><i style="background:${esc(mk.color)}"></i>${esc(mk.name)}</span>`).join('');
+      const own = b.done ? `<span class="mark" style="left:${b.value}%"><i style="background:var(--paper)"></i>אני</span>` : '';
+      const ctl = b.act && !b.done ? `<input type="range" min="0" max="100" value="50" id="sl" aria-label="כיוון על הסקאלה"><button class="btn btn-main btn-block" data-act="${esc(b.act)}" data-slider="sl">🎯 נעילה</button>` : '';
+      return `<div class="slider"><div class="labels"><span>← ${esc(b.left)}</span><span>${esc(b.right)} →</span></div><div class="track">${zones}${marks}${own}</div>${ctl}${b.done ? '<p class="muted" style="text-align:center;direction:rtl">נעלת! מחכים לשאר…</p>' : ''}</div>`;
+    }
+    case 'canvas': return `<div class="cv-slot" data-canvas="${esc(b.canvas)}" data-count="${b.count}" data-can="${b.canDraw ? 1 : 0}" data-tools="${b.tools ? 1 : 0}" data-one="${b.oneStroke ? 1 : 0}" data-color="${esc(b.color || '')}"></div>`;
+    default: return '';
+  }
+}
+
+/* ---------- timers ---------- */
+function tickTimers() {
+  document.querySelectorAll('.timer[data-end]').forEach(t => {
+    const left = Math.max(0, Math.ceil((Number(t.dataset.end) - (Date.now() + offset)) / 1000));
+    t.textContent = left; t.classList.toggle('low', left <= 10);
+  });
+}
+setInterval(tickTimers, 250);
+
+/* ---------- shared canvas ---------- */
+const COLORS = ['#1b1917', '#8a847d', '#f2ede6', '#c8955a', '#8b5e3c', '#e8673a', '#d9b44a', '#6fa58c', '#6f93c9', '#b07fc0', '#d46a6a'];
+const cv = {
+  wrap: null, el: null, ctx: null, id: null, strokes: [], color: '#1b1917', w: 4, can: false, one: false, fixed: '', drawing: null, lastFlush: 0, synced: 0,
+  build() {
+    this.wrap = document.createElement('div'); this.wrap.className = 'cvwrap';
+    this.el = document.createElement('canvas'); this.el.width = 600; this.el.height = 600;
+    this.ctx = this.el.getContext('2d'); this.ctx.lineCap = 'round'; this.ctx.lineJoin = 'round';
+    this.tools = document.createElement('div'); this.tools.className = 'tools';
+    this.wrap.append(this.el, this.tools);
+    const pos = e => { const r = this.el.getBoundingClientRect(); return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))]; };
+    this.el.addEventListener('pointerdown', e => {
+      if (!this.can) return; e.preventDefault(); this.el.setPointerCapture(e.pointerId);
+      const [x, y] = pos(e); this.drawing = { c: this.fixed || this.color, w: this.fixed ? 6 : this.w, pts: [x, y], sent: 0 };
+    });
+    this.el.addEventListener('pointermove', e => {
+      if (!this.drawing) return; e.preventDefault();
+      const [x, y] = pos(e), d = this.drawing, n = d.pts.length;
+      if (Math.abs(x - d.pts[n - 2]) + Math.abs(y - d.pts[n - 1]) < 0.004) return;
+      d.pts.push(x, y);
+      this.seg({ c: d.c, w: d.w, pts: d.pts.slice(-4) });
+      if (Date.now() - this.lastFlush > 60) this.flush(false);
+    });
+    const end = () => { if (!this.drawing) return; this.flush(true); const one = this.one; this.drawing = null; if (one) { this.can = false; send({ type: 'act', act: 'done' }); } };
+    this.el.addEventListener('pointerup', end); this.el.addEventListener('pointercancel', end);
+  },
+  flush(last) {
+    const d = this.drawing; if (!d) return; this.lastFlush = Date.now();
+    let pts = d.pts.slice(Math.max(0, d.sent - 2));
+    if (pts.length < 4) pts = pts.length === 2 ? [pts[0], pts[1], pts[0] + 0.001, pts[1]] : pts;
+    if (pts.length >= 4 || last) {
+      const st = { c: d.c, w: d.w, pts };
+      if (pts.length >= 2) { this.strokes.push(st); send({ type: 'stroke', canvas: this.id, last: !!last, ...st }); }
+      d.sent = d.pts.length;
+    }
+  },
+  seg(st) {
+    const k = this.el.width / 300, p = st.pts, c = this.ctx;
+    c.strokeStyle = st.c; c.lineWidth = st.w * k; c.beginPath(); c.moveTo(p[0] * 600, p[1] * 600);
+    for (let i = 2; i < p.length; i += 2) c.lineTo(p[i] * 600, p[i + 1] * 600);
+    if (p.length === 2) c.lineTo(p[0] * 600 + 0.1, p[1] * 600);
+    c.stroke();
+  },
+  redraw() { this.ctx.clearRect(0, 0, 600, 600); this.strokes.forEach(s => this.seg(s)); },
+  add(m) { if (m.canvas !== this.id) return; this.strokes.push(m); this.seg(m); },
+  replace(id, strokes) { if (id !== this.id) return; this.strokes = strokes.slice(); this.redraw(); },
+  mount() {
+    const slot = document.querySelector('.cv-slot'); if (!slot) return;
+    if (!this.el) this.build();
+    const id = slot.dataset.canvas, count = Number(slot.dataset.count);
+    if (id !== this.id) { this.id = id; this.strokes = []; this.redraw(); this.synced = 0; }
+    this.can = slot.dataset.can === '1'; this.one = slot.dataset.one === '1'; this.fixed = slot.dataset.color || '';
+    if (count > this.strokes.length && Date.now() - this.synced > 1500 && !this.drawing) { this.synced = Date.now(); send({ type: 'sync' }); }
+    this.el.style.cursor = this.can ? 'crosshair' : 'default';
+    this.tools.innerHTML = slot.dataset.tools === '1' ? COLORS.map(c => `<button class="sw ${c === this.color ? 'sel' : ''}" style="background:${c}" data-color="${c}" aria-label="צבע"></button>`).join('') +
+      [3, 8, 18].map(w => `<button class="wd ${w === this.w ? 'sel' : ''}" data-width="${w}" aria-label="עובי"><span style="width:${w}px;height:${w}px;border-radius:50%;background:var(--fg);display:block"></span></button>`).join('') +
+      `<button class="btn btn-ghost btn-sm" data-act="clear" style="margin-left:auto">🧽 ניקוי</button>` : '';
+    slot.appendChild(this.wrap);
+  },
+};
+
+/* ---------- events ---------- */
+document.addEventListener('click', e => {
+  const t = e.target;
+  const rv = t.closest('[data-reveal]');
+  if (rv) { const k = rv.dataset.reveal; revealed[k] = !revealed[k]; return renderRoom(); }
+  const col = t.closest('[data-color]'); if (col && col.classList.contains('sw')) { cv.color = col.dataset.color; return cv.mount(); }
+  const wd = t.closest('[data-width]'); if (wd) { cv.w = Number(wd.dataset.width); return cv.mount(); }
+  const go = t.closest('[data-go]');
+  if (go) {
+    const g = go.dataset.go;
+    if (g === 'menu') { menuOpen = !menuOpen; if (go.tagName === 'A' && go.getAttribute('href') !== '#') { setTimeout(render, 0); return; } e.preventDefault(); return render(); }
+    if (g === 'home') { screen = 'home'; history.replaceState(null, '', '/'); render(); return scrollTo(0, 0); }
+    if (g === 'create') { menuOpen = false; screen = 'create'; render(); scrollTo(0, 0); const i = $('#cname'); if (i) i.focus(); return; }
+    if (g === 'join') { e.preventDefault(); menuOpen = false; screen = 'join'; render(); return scrollTo(0, 0); }
+    if (g === 'leave') { wantConnected = true; send({ type: 'leave' }); return leaveLocal(); }
+    if (g === 'share' || g === 'copy') {
+      const link = location.origin + '/' + view.code, txt = `בואו לשחק SIGAZNU! קוד החדר: ${view.code}`;
+      if (g === 'share' && navigator.share) { navigator.share({ title: 'SIGAZNU', text: txt, url: link }).catch(() => {}); return; }
+      (navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject()).then(() => toast('הקישור הועתק'), () => toast(link));
+      return;
+    }
+  }
+  const a = t.closest('[data-act]');
+  if (a && a.tagName !== 'FORM') {
+    if (a.classList.contains('pick') && a.classList.contains('off')) { const n = view.players.length; return toast(Number(a.dataset.min) > n ? `${a.dataset.name} צריך לפחות ${a.dataset.min} שחקנים מחוברים` : `${a.dataset.name} מתאים לעד ${a.dataset.max} שחקנים`); }
+    const m = { type: 'act', act: a.dataset.act };
+    if (a.dataset.id) m.id = a.dataset.id;
+    if (a.dataset.k) m.k = a.dataset.k;
+    if (a.dataset.slider) m.value = Number($('#' + a.dataset.slider).value);
+    send(m);
+  }
+});
+document.addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target, kind = f.dataset.form;
+  if (kind === 'create') {
+    const name = $('#cname').value.trim(); if (!name) return toast('כתבו שם כדי שסיגי ידע איך להכריז עליכם');
+    pendingName = name; store.set('sigaznu.name', name); session = { name, token }; send({ type: 'create', name, token });
+  } else if (kind === 'homejoin') {
+    prefillCode = $('#homecode').value.trim().toUpperCase(); screen = 'join'; render(); const n = $('#jname'); if (n) n.focus();
+  } else if (kind === 'join') {
+    const code = $('#jcode').value.trim().toUpperCase(), name = $('#jname').value.trim();
+    if (!/^[A-Z]{4}$/.test(code)) return toast('קוד חדר הוא 4 אותיות באנגלית');
+    if (!name) return toast('כתבו שם');
+    pendingName = name; store.set('sigaznu.name', name); session = { name, token };
+    send({ type: 'join', code, name, token });
+  } else if (kind === 'act') {
+    const inp = f.querySelector('input'), value = inp.value.trim(); if (!value) return;
+    justSent = true; inp.value = '';
+    send({ type: 'act', act: f.dataset.act, value });
+  }
+});
+document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-reveal][tabindex]')) { e.preventDefault(); e.target.click(); } });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && session && session.code && (!ws || ws.readyState > 1)) connect(); });
+
+/* ---------- boot ---------- */
+if (session && session.code && screen !== 'join') { screen = 'room'; app.innerHTML = `<main class="wrap"><div class="screen">${sayHTML('מתחבר לחדר ' + session.code + '…')}</div></main>`; connect(); }
+else render();
+})();
+</script>
+</body>
+</html>
