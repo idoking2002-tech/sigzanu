@@ -729,4 +729,720 @@ G.dare = {
   skip(ctx) { const s = ctx.g.s; if (s.phase === 'show') { s.phase = 'vote'; s.votes = {}; } else if (s.phase === 'vote') this.close(s); else this.next(ctx); },
 };
 
+/* ============ shared helpers for the second batch ============ */
+const zero = ids => Object.fromEntries(ids.map(i => [i, 0]));
+// evening points where the LOWEST score wins: 3 / 2 / 1, ties share
+function rankAwardLow(scores) {
+  const vals = [...new Set(Object.values(scores))].sort((a, b) => a - b);
+  const out = {};
+  for (const id in scores) { const r = vals.indexOf(scores[id]); out[id] = r < 3 ? 3 - r : 0; }
+  return out;
+}
+const scoreRows = (ctx, ids, pts, extra = () => ({})) => ({ t: 'players', items: ids.slice().sort((a, b) => pts[b] - pts[a]).map(id => row(ctx, id, { right: pts[id], tone: 'ok', ...extra(id) })) });
+const nextIn = (order, cur, ok) => { for (let k = 1; k <= order.length; k++) { const id = order[(order.indexOf(cur) + k) % order.length]; if (ok(id)) return id; } return null; };
+
+/* ============ התאמת המונים ============ */
+const herdKey = t => { let k = norm(t); if (k.length >= 3 && k[0] === 'ה') k = k.slice(1); return k; };
+G.herd = {
+  id: 'herd', name: 'התאמת המונים', icon: '🐑', min: 3, max: 16,
+  start(ctx) { return { phase: 'write', round: 1, rounds: 5, qs: shuffle(C.HERD_QUESTIONS), ans: {}, groups: [], win: [], pts: zero(ctx.ids), order: ctx.ids.slice() }; },
+  view(ctx, pid) {
+    const s = ctx.g.s, q = s.qs[(s.round - 1) % s.qs.length];
+    const scores = scoreRows(ctx, s.order, s.pts, id => ({ tag: s.phase === 'write' && s.ans[id] ? '✔' : '' }));
+    if (s.phase === 'write') return { blocks: [say('תענו מה שרוב החדר יענה. כל מי שנמצא בקבוצה הכי גדולה של תשובות זהות מקבל נקודה.'), text(`שאלה ${s.round} מתוך ${s.rounds}`, true), big(q),
+      s.ans[pid] ? text(`ענית: "${s.ans[pid]}". מחכים לשאר…`, true) : { t: 'input', act: 'ans', placeholder: 'התשובה שלך', button: 'שליחה', max: 24 }, scores] };
+    return { blocks: [say(s.win.length ? `העדר אמר "${s.groups[0].label}"! נקודה ל${s.win.map(id => ctx.name(id)).join(', ')}.` : 'אין קבוצה אחת הכי גדולה, אז הפעם אף אחד לא מקבל נקודה.'), big(q),
+      { t: 'list', items: s.groups.map((g, i) => ({ name: `${g.label} ×${g.ids.length}`, color: i === 0 && s.win.length ? '#8fb39a' : '#8a847d', text: g.ids.map(id => ctx.name(id)).join(', '), tone: i === 0 && s.win.length ? 'ok' : '' })) },
+      scores, hostNext(ctx, pid, s.round < s.rounds ? 'לשאלה הבאה ▶' : 'לתוצאות 🏁')] };
+  },
+  reveal(s) {
+    const m = {};
+    for (const id in s.ans) { const k = herdKey(s.ans[id]); (m[k] = m[k] || { label: s.ans[id], ids: [] }).ids.push(id); }
+    s.groups = Object.values(m).sort((a, b) => b.ids.length - a.ids.length);
+    const [top, second] = s.groups;
+    s.win = top && top.ids.length > 1 && !(second && second.ids.length === top.ids.length) ? top.ids : [];
+    s.win.forEach(id => s.pts[id]++);
+    s.phase = 'reveal';
+  },
+  act(ctx, pid, m) {
+    const s = ctx.g.s;
+    if (s.phase === 'write' && m.act === 'ans' && !s.ans[pid]) {
+      const t = cut(m.value, 24); if (!t) return;
+      s.ans[pid] = t;
+      if (s.order.every(id => s.ans[id])) this.reveal(s);
+    } else if (s.phase === 'reveal' && m.act === 'next' && ctx.isHost(pid)) {
+      if (s.round >= s.rounds) return ctx.finish(rankAward(s.pts), 'העדר דיבר! הנה מי שחושב הכי כמו כולם:');
+      s.round++; s.ans = {}; s.phase = 'write';
+    }
+  },
+  skip(ctx) { const s = ctx.g.s; if (s.phase === 'write') this.reveal(s); },
+};
+
+/* ============ צלייה חמה ============ */
+G.roast = {
+  id: 'roast', name: 'צלייה חמה', icon: '🔥', min: 3, max: 16,
+  start(ctx) {
+    const ids = shuffle(ctx.ids), n = ids.length, prompts = shuffle(C.ROAST_PROMPTS), duels = [];
+    if (n <= 8) for (let i = 0; i < n; i++) duels.push({ q: prompts[i % prompts.length], a: ids[i], b: ids[(i + 1) % n] });
+    else for (let i = 0; i + 1 < n; i += 2) duels.push({ q: prompts[(i / 2) % prompts.length], a: ids[i], b: ids[i + 1] });
+    duels.forEach((d, i) => { d.id = 'q' + i; d.ans = {}; d.votes = {}; });
+    return { phase: 'write', duels, d: 0, pts: zero(ctx.ids), order: ctx.ids.slice(), bonus: false };
+  },
+  mine(s, pid) { return s.duels.filter(d => d.a === pid || d.b === pid); },
+  voters(s, d) { return s.order.filter(id => id !== d.a && id !== d.b); },
+  view(ctx, pid) {
+    const s = ctx.g.s, scores = scoreRows(ctx, s.order, s.pts);
+    if (s.phase === 'write') {
+      const todo = this.mine(s, pid).filter(d => !d.ans[pid]);
+      return { blocks: [say('כל שאלה הולכת לשני שחקנים. כתבו את התשובה הכי מצחיקה, והחדר יצביע מי ניצח בדו־קרב.'),
+        ...(todo.length ? [big(todo[0].q), { t: 'input', act: 'ans', id: todo[0].id, placeholder: 'התשובה הכי מצחיקה שלך', button: 'שליחה', max: 60 }, text(`נשארו לך ${todo.length} ${todo.length === 1 ? 'שאלה' : 'שאלות'}`, true)]
+          : [text(this.mine(s, pid).length ? 'שלחת הכול! מחכים לשאר…' : 'הפעם אין לך שאלה. תצביעו בדו־קרבות!', true)]), scores] };
+    }
+    const d = s.duels[s.d], A = d.ans[d.a] || '(לא ענה/תה בזמן)', B = d.ans[d.b] || '(לא ענה/תה בזמן)';
+    if (s.phase === 'vote') {
+      const author = pid === d.a || pid === d.b;
+      return { blocks: [text(`דו־קרב ${s.d + 1} מתוך ${s.duels.length}`, true), big(d.q),
+        author ? { t: 'list', items: [{ name: 'א', text: A }, { name: 'ב', text: B }] } : { t: 'choices', act: 'vote', selected: d.votes[pid], items: [{ id: 'a', name: A }, { id: 'b', name: B }] },
+        text(author ? 'זה הדו־קרב שלך! מחכים להצבעות…' : `הצביעו ${Object.keys(d.votes).length} מתוך ${this.voters(s, d).length}`, true)] };
+    }
+    const va = Object.values(d.votes).filter(v => v === 'a').length, vb = Object.values(d.votes).filter(v => v === 'b').length;
+    return { blocks: [say(va === vb ? 'תיקו! שניהם מצחיקים באותה מידה.' : `${ctx.name(va > vb ? d.a : d.b)} ניצח/ה בדו־קרב${s.bonus ? ' עם צלייה מושלמת! +1 בונוס' : ''}.`), big(d.q),
+      { t: 'list', items: [[d.a, A, va], [d.b, B, vb]].map(([id, t, v]) => ({ name: `${ctx.name(id)} · ${v} ${v === 1 ? 'קול' : 'קולות'}`, color: ctx.p(id).color, text: t, tone: v > (v === va ? vb : va) ? 'ok' : '' })) },
+      scores, hostNext(ctx, pid, s.d + 1 < s.duels.length ? 'לדו־קרב הבא ▶' : 'לתוצאות 🏁')] };
+  },
+  toVote(s) { s.phase = 'vote'; s.d = 0; },
+  score(s) {
+    const d = s.duels[s.d], vs = Object.values(d.votes), va = vs.filter(v => v === 'a').length, vb = vs.filter(v => v === 'b').length;
+    s.pts[d.a] += va; s.pts[d.b] += vb;
+    const all = this.voters(s, d).length;
+    s.bonus = all > 1 && (va === all || vb === all);
+    if (s.bonus) s.pts[va === all ? d.a : d.b] += 1;
+    s.phase = 'reveal';
+  },
+  act(ctx, pid, m) {
+    const s = ctx.g.s;
+    if (s.phase === 'write' && m.act === 'ans') {
+      const d = s.duels.find(x => x.id === m.id && (x.a === pid || x.b === pid)); if (!d || d.ans[pid]) return;
+      const t = cut(m.value, 60); if (!t) return;
+      d.ans[pid] = t;
+      if (s.duels.every(x => x.ans[x.a] && x.ans[x.b])) this.toVote(s);
+    } else if (s.phase === 'vote' && m.act === 'vote' && (m.id === 'a' || m.id === 'b')) {
+      const d = s.duels[s.d]; if (pid === d.a || pid === d.b) return;
+      d.votes[pid] = m.id;
+      if (this.voters(s, d).every(id => d.votes[id])) this.score(s);
+    } else if (s.phase === 'reveal' && m.act === 'next' && ctx.isHost(pid)) this.next(ctx);
+  },
+  next(ctx) {
+    const s = ctx.g.s;
+    if (s.d + 1 >= s.duels.length) return ctx.finish(rankAward(s.pts), 'הצלייה הסתיימה! הנה הקומיקאים של הערב:');
+    s.d++; s.phase = 'vote';
+  },
+  skip(ctx) { const s = ctx.g.s; if (s.phase === 'write') this.toVote(s); else if (s.phase === 'vote') this.score(s); else this.next(ctx); },
+};
+
+/* ============ מילות קוד ============ */
+const CODE_WORDS = [...new Set([...C.DRAW_WORDS, ...C.RACE_WORDS, ...Object.values(C.CATEGORY_WORDS).flat()])].filter(w => !w.includes(' '));
+G.codes = {
+  id: 'codes', name: 'מילות קוד', icon: '🗝️', min: 4, max: 10,
+  start(ctx) {
+    const ids = shuffle(ctx.ids), A = ids.filter((_, i) => i % 2 === 0), B = ids.filter((_, i) => i % 2 === 1);
+    const first = Math.random() < 0.5 ? 'A' : 'B', other = first === 'A' ? 'B' : 'A';
+    const keys = shuffle([...Array(9).fill(first), ...Array(8).fill(other), ...Array(7).fill('N'), 'X']);
+    return { phase: 'clue', teams: { A, B }, spy: { A: A[0], B: B[0] }, team: first, tiles: shuffle(CODE_WORDS).slice(0, 25).map((w, i) => ({ id: 't' + i, w, k: keys[i], open: false })), clue: '', left: 0, last: '' };
+  },
+  teamOf(s, id) { return s.teams.A.includes(id) ? 'A' : 'B'; },
+  remaining(s, T) { return s.tiles.filter(t => t.k === T && !t.open).length; },
+  view(ctx, pid) {
+    const s = ctx.g.s, T = this.teamOf(s, pid), isSpy = s.spy[T] === pid, mineTurn = T === s.team;
+    const canGuess = s.phase === 'guess' && mineTurn && !isSpy;
+    const grid = { t: 'grid', act: canGuess ? 'guess' : null, spy: isSpy, items: s.tiles.map(t => ({ id: t.id, text: t.w, k: isSpy || t.open ? t.k : null, open: t.open })) };
+    const head = big(`${TEAMS.A} ${this.remaining(s, 'A')} · ${this.remaining(s, 'B')} ${TEAMS.B}`, `נשארו מילים לגלות · תור ${TEAMS[s.team]}`);
+    const board = { t: 'players', items: ['A', 'B'].flatMap(X => s.teams[X].map(id => row(ctx, id, { tag: TEAMS[X] + (s.spy[X] === id ? ' · ראש סוכנות' : ''), tone: X === 'A' ? 'muted' : 'turn' }))) };
+    const blocks = [];
+    if (s.last) blocks.push(say(s.last));
+    else blocks.push(say(`שתי סוכנויות: ${TEAMS.A} נגד ${TEAMS.B}. ראש הסוכנות רואה איזו מילה שייכת למי ונותן רמז של מילה אחת ומספר. אל תפגעו במלכודת 💀!`));
+    blocks.push(head);
+    if (s.phase === 'clue') blocks.push(isSpy && mineTurn ? { t: 'input', act: 'clue', placeholder: 'מילה ומספר, למשל: ים 2', button: 'שליחה', max: 24 } : text(`${ctx.name(s.spy[s.team])} חושב/ת על רמז ל${TEAMS[s.team]}…`, true));
+    else blocks.push(big(`"${s.clue}"`, `עוד ${s.left >= 50 ? 'כמה שרוצים' : s.left} ניחושים`), ...(canGuess ? [btns(btn('✋ סיום התור', 'pass', 'ghost'))] : [text(mineTurn ? (isSpy ? 'הקבוצה שלך מנחשת. אסור לרמוז!' : '') : 'הקבוצה השנייה מנחשת…', true)]));
+    blocks.push(grid, board);
+    return { blocks: blocks.filter(b => b && b.text !== '') };
+  },
+  endTurn(s) { s.team = s.team === 'A' ? 'B' : 'A'; s.phase = 'clue'; s.clue = ''; s.left = 0; },
+  win(ctx, W, why) {
+    const s = ctx.g.s;
+    ctx.finish(Object.fromEntries([...s.teams.A, ...s.teams.B].map(id => [id, this.teamOf(s, id) === W ? 3 : 1])), `${TEAMS[W]} ניצחו! ${why} 3 נקודות לכל מנצח ונקודה לכל השאר.`);
+  },
+  act(ctx, pid, m) {
+    const s = ctx.g.s, T = this.teamOf(s, pid);
+    if (s.phase === 'clue' && m.act === 'clue' && s.spy[s.team] === pid) {
+      const mt = cut(m.value, 24).match(/^(\S+)\s+(\d)$/);
+      if (!mt) return ctx.error(pid, 'כתבו מילה אחת ואחריה מספר, למשל: ים 2');
+      if (s.tiles.some(t => !t.open && norm(t.w) === norm(mt[1]))) return ctx.error(pid, 'אי אפשר לתת רמז שהוא אחת המילים על הלוח.');
+      const n = Number(mt[2]); s.clue = `${mt[1]} ${n}`; s.left = n === 0 ? 99 : n + 1; s.phase = 'guess'; s.last = `${ctx.name(pid)} נתן/ה רמז: "${s.clue}".`;
+    } else if (s.phase === 'guess' && T === s.team && s.spy[T] !== pid) {
+      if (m.act === 'pass') { s.last = `${TEAMS[T]} סיימו את התור.`; return this.endTurn(s); }
+      if (m.act !== 'guess') return;
+      const tile = s.tiles.find(t => t.id === m.id && !t.open); if (!tile) return;
+      tile.open = true;
+      const other = T === 'A' ? 'B' : 'A';
+      if (tile.k === 'X') return this.win(ctx, other, `${TEAMS[T]} עלו על המלכודת 💀 במילה "${tile.w}".`);
+      if (!this.remaining(s, 'A') || !this.remaining(s, 'B')) return this.win(ctx, this.remaining(s, 'A') ? 'B' : 'A', 'כל המילים שלהם נמצאו.');
+      if (tile.k === T) { s.left--; s.last = `"${tile.w}" נכון! ✔`; if (s.left <= 0) this.endTurn(s); }
+      else { s.last = `"${tile.w}" ${tile.k === 'N' ? 'היא מילה ניטרלית' : `שייכת ל${TEAMS[other]}`}. התור עובר.`; this.endTurn(s); }
+    }
+  },
+  skip(ctx) { this.endTurn(ctx.g.s); },
+};
+
+/* ============ פראייר מי לוקח ============ */
+G.nothanks = {
+  id: 'nothanks', name: 'פראייר מי לוקח', icon: '🪙', min: 3, max: 7,
+  start(ctx) {
+    const deck = shuffle(Array.from({ length: 33 }, (_, i) => i + 3)).slice(9), n = ctx.ids.length, tok = n <= 5 ? 11 : n === 6 ? 9 : 7;
+    return { deck, card: deck.pop(), pot: 0, tokens: Object.fromEntries(ctx.ids.map(i => [i, tok])), cards: Object.fromEntries(ctx.ids.map(i => [i, []])), order: shuffle(ctx.ids), turn: 0, last: '' };
+  },
+  score(cards, tok) { const c = cards.slice().sort((a, b) => a - b); let s = 0; c.forEach((v, i) => { if (i === 0 || c[i - 1] !== v - 1) s += v; }); return s - tok; },
+  runs(cards) { const c = cards.slice().sort((a, b) => a - b), out = []; c.forEach((v, i) => { if (i && c[i - 1] === v - 1) out[out.length - 1].push(v); else out.push([v]); }); return out.map(r => r.length > 1 ? `${r[0]}–${r[r.length - 1]}` : r[0]).join(' · '); },
+  view(ctx, pid) {
+    const s = ctx.g.s, cur = s.order[s.turn], me = pid === cur;
+    return { blocks: [say(s.last || 'כל קלף שלוקחים שווה מינוס נקודות, אבל רצף נספר רק לפי הקלף הנמוך שבו. לא רוצים את הקלף? משלמים אסימון ומעבירים. הניקוד הנמוך מנצח.'),
+      { t: 'cards', items: [{ v: s.card }] }, big(`🪙 ${s.pot} על הקלף`, `נשארו ${s.deck.length} קלפים בחפיסה`),
+      me ? btns(btn(`✋ לוקח/ת (+${s.pot} 🪙)`, 'take', 'main'), btn('🪙 לא תודה', 'pay', 'ghost', { disabled: !s.tokens[pid] })) : text(`התור של ${ctx.name(cur)}`, true),
+      ...(s.order.includes(pid) ? [text(`יש לך ${s.tokens[pid]} אסימונים (רק את/ה רואה)`, true)] : []),
+      { t: 'players', items: s.order.map(id => row(ctx, id, { sub: s.cards[id].length ? this.runs(s.cards[id]) : 'אין קלפים', tag: id === cur ? 'בתור' : '', tone: 'turn' })) }] };
+  },
+  act(ctx, pid, m) {
+    const s = ctx.g.s; if (pid !== s.order[s.turn]) return;
+    if (m.act === 'take' || (m.act === 'pay' && !s.tokens[pid])) {
+      s.cards[pid].push(s.card); s.tokens[pid] += s.pot; s.last = `${ctx.name(pid)} לקח/ה את ${s.card} עם ${s.pot} אסימונים, וממשיך/ה לקלף הבא.`; s.pot = 0;
+      if (!s.deck.length) {
+        const sc = Object.fromEntries(s.order.map(id => [id, this.score(s.cards[id], s.tokens[id])]));
+        return ctx.finish(rankAwardLow(sc), 'נגמרה החפיסה! הניקוד (נמוך זה טוב): ' + s.order.slice().sort((a, b) => sc[a] - sc[b]).map(id => `${ctx.name(id)} ${sc[id]}`).join(', '));
+      }
+      s.card = s.deck.pop();
+    } else if (m.act === 'pay') {
+      s.tokens[pid]--; s.pot++; s.turn = (s.turn + 1) % s.order.length; s.last = `${ctx.name(pid)} שילם/ה אסימון ואמר/ה לא תודה.`;
+    }
+  },
+  skip(ctx) { const s = ctx.g.s, id = s.order[s.turn]; this.act(ctx, id, { act: s.tokens[id] ? 'pay' : 'take' }); },
+};
+
+/* ============ חתולים וכלבים ============ */
+const golfDeck = () => shuffle([0, 0, 13, 13, ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].flatMap(v => [v, v, v, v])]);
+const GOLF_POWER = { 7: 'own', 8: 'own', 9: 'other', 10: 'other', 11: 'swap', 12: 'swap' };
+const GOLF_POWER_TXT = { own: 'הצצה באחד הקלפים שלך', other: 'הצצה בקלף של שחקן אחר', swap: 'החלפה עיוורת של קלף שלך בקלף של מישהו אחר' };
+G.golf = {
+  id: 'golf', name: 'חתולים וכלבים', icon: '🐱', min: 2, max: 6,
+  start(ctx) { const s = { round: 0, rounds: 2, order: shuffle(ctx.ids), total: zero(ctx.ids) }; this.deal(s); return s; },
+  deal(s) {
+    s.round++; s.deck = golfDeck(); s.hands = {}; s.order.forEach(id => { s.hands[id] = [s.deck.pop(), s.deck.pop(), s.deck.pop(), s.deck.pop()]; });
+    s.discard = [s.deck.pop()]; s.phase = 'peek'; s.ready = []; s.turn = (s.round - 1) % s.order.length; s.hold = null; s.from = null; s.power = null; s.pick = null;
+    s.caller = null; s.flash = {}; s.last = ''; s.gain = {};
+  },
+  cardLabel(owner, i, ctx) { return `${ctx.name(owner)} · קלף ${i + 1}`; },
+  view(ctx, pid) {
+    const s = ctx.g.s, cur = s.order[s.turn], me = pid === cur, mine = s.hands[pid] || [];
+    const table = { t: 'players', items: s.order.map(id => row(ctx, id, { tag: id === s.caller ? 'קרא/ה חתולים!' : id === cur && s.phase !== 'peek' && s.phase !== 'roundEnd' ? 'בתור' : '', tone: 'turn', right: s.phase === 'roundEnd' ? s.total[id] : '', sub: s.phase === 'roundEnd' ? `${s.hands[id].join(' + ')} = ${s.gain[id]}` : '' })) };
+    const flash = s.flash[pid] ? [{ t: 'secret', tone: 'word', title: 'רק את/ה רואה', text: s.flash[pid] }] : [];
+    if (s.phase === 'peek') {
+      const ready = s.ready.includes(pid);
+      return { blocks: [say('לכל אחד 4 קלפים הפוכים. מציצים עכשיו בשניים הראשונים וזוכרים! המטרה: סכום הכי נמוך. בתור מושכים קלף ומחליפים, ומי שבטוח שיש לו הכי מעט קורא "חתולים!".'),
+        text(`סיבוב ${s.round} מתוך ${s.rounds}`, true),
+        ready ? text('מחכים שכולם יזכרו…', true) : { t: 'hand', items: mine.map((v, i) => ({ id: String(i), v: i < 2 ? v : '?', back: i >= 2 })) },
+        ready ? null : btns(btn('🧠 זכרתי', 'ready')), table].filter(Boolean) };
+    }
+    if (s.phase === 'roundEnd') return { blocks: [say(s.last), h('ניקוד מצטבר (נמוך זה טוב)'), table, hostNext(ctx, pid, s.round < s.rounds ? 'לסיבוב הבא ▶' : 'לתוצאות 🏁')] };
+    const top = s.discard[s.discard.length - 1];
+    const myHand = act => ({ t: 'hand', act, items: mine.map((v, i) => ({ id: String(i), v: '?', back: true })) });
+    const blocks = [say(s.last || `התור של ${ctx.name(cur)}.`), ...flash, { t: 'cards', items: [{ v: top === undefined ? '—' : top }], empty: '' }, text(`ערימת הזריקה · נשארו ${s.deck.length} בחפיסה${s.caller ? ` · ${ctx.name(s.caller)} קרא/ה חתולים, זה הסבב האחרון!` : ''}`, true)];
+    if (!me) return { blocks: [...blocks, h('הקלפים שלך'), myHand(null), table] };
+    if (s.phase === 'turn') return { blocks: [...blocks, btns(btn('🂠 משיכה מהחפיסה', 'draw', 'main'), btn(`לקיחת ${top} מהזריקה`, 'take', 'tan', { disabled: top === undefined })),
+      ...(s.caller ? [] : [btns(btn('🐱 חתולים! (סיום)', 'call', 'ember'))]), h('הקלפים שלך'), myHand(null), table] };
+    if (s.phase === 'drawn') {
+      const pw = s.from === 'deck' && GOLF_POWER[s.hold];
+      return { blocks: [...blocks, { t: 'secret', tone: 'word', title: 'הקלף שמשכת', text: String(s.hold), sub: pw ? `אם תזרקו אותו: ${GOLF_POWER_TXT[pw]}` : '' },
+        h('הקישו על קלף שלכם כדי להחליף'), myHand('swap'), ...(s.from === 'deck' ? [btns(btn(pw ? 'זריקה והפעלת הכוח' : 'זריקה', 'discard', 'ghost'))] : []), table] };
+    }
+    // power
+    const others = s.order.filter(id => id !== pid).flatMap(o => s.hands[o].map((_, i) => ({ id: `${o}:${i}`, name: this.cardLabel(o, i, ctx), color: ctx.p(o).color })));
+    if (s.power === 'own') return { blocks: [...blocks, h('באיזה קלף שלך להציץ?'), myHand('peekOwn'), btns(btn('ויתור', 'skipPower', 'ghost')), table] };
+    if (s.power === 'other') return { blocks: [...blocks, h('באיזה קלף להציץ?'), { t: 'choices', act: 'peekOther', items: others }, btns(btn('ויתור', 'skipPower', 'ghost')), table] };
+    return { blocks: [...blocks, h(s.pick == null ? 'איזה קלף שלך להחליף?' : 'עם איזה קלף להחליף?'), s.pick == null ? myHand('swapMine') : { t: 'choices', act: 'swapOther', items: others }, btns(btn('ויתור', 'skipPower', 'ghost')), table] };
+  },
+  endTurn(ctx) {
+    const s = ctx.g.s;
+    s.hold = null; s.from = null; s.power = null; s.pick = null; s.phase = 'turn';
+    s.turn = (s.turn + 1) % s.order.length;
+    if (s.caller && s.order[s.turn] === s.caller) return this.endRound(ctx);
+  },
+  endRound(ctx) {
+    const s = ctx.g.s;
+    s.order.forEach(id => { s.gain[id] = s.hands[id].reduce((a, b) => a + b, 0); });
+    let note = '';
+    if (s.caller) {
+      const lowest = s.order.every(id => id === s.caller || s.gain[id] > s.gain[s.caller]);
+      if (!lowest) { s.gain[s.caller] += 10; note = ` ${ctx.name(s.caller)} קרא/ה חתולים ולא היה/תה הכי נמוך/ה: +10 קנס!`; }
+      else note = ` ${ctx.name(s.caller)} קרא/ה חתולים בצדק!`;
+    }
+    s.order.forEach(id => { s.total[id] += s.gain[id]; });
+    s.last = `סוף סיבוב ${s.round}. הקלפים נחשפו.${note}`;
+    s.phase = 'roundEnd'; s.flash = {};
+  },
+  draw(s) { if (!s.deck.length) { const top = s.discard.pop(); s.deck = shuffle(s.discard); s.discard = [top]; } return s.deck.pop(); },
+  act(ctx, pid, m) {
+    const s = ctx.g.s;
+    if (s.phase === 'peek' && m.act === 'ready' && !s.ready.includes(pid)) { s.ready.push(pid); if (s.order.every(id => s.ready.includes(id))) s.phase = 'turn'; return; }
+    if (s.phase === 'roundEnd' && m.act === 'next' && ctx.isHost(pid)) {
+      if (s.round >= s.rounds) return ctx.finish(rankAwardLow(s.total), 'חתולים וכלבים נגמר! הסכום הנמוך מנצח:');
+      return this.deal(s);
+    }
+    if (pid !== s.order[s.turn]) return;
+    delete s.flash[pid];
+    const name = ctx.name(pid), idx = Number(m.id);
+    if (s.phase === 'turn') {
+      if (m.act === 'draw') { const c = this.draw(s); if (c === undefined) return this.endRound(ctx); s.hold = c; s.from = 'deck'; s.phase = 'drawn'; s.last = `${name} משך/ה קלף.`; }
+      else if (m.act === 'take' && s.discard.length) { s.hold = s.discard.pop(); s.from = 'discard'; s.phase = 'drawn'; s.last = `${name} לקח/ה ${s.hold} מהזריקה.`; }
+      else if (m.act === 'call' && !s.caller) { s.caller = pid; s.last = `${name} קרא/ה חתולים! לכל השאר נשאר תור אחד.`; this.endTurn(ctx); }
+    } else if (s.phase === 'drawn') {
+      if (m.act === 'swap' && idx >= 0 && idx < 4) {
+        const old = s.hands[pid][idx]; s.hands[pid][idx] = s.hold; s.discard.push(old);
+        s.last = `${name} החליף/ה את קלף ${idx + 1} וזרק/ה ${old}.`; this.endTurn(ctx);
+      } else if (m.act === 'discard' && s.from === 'deck') {
+        s.discard.push(s.hold); const pw = GOLF_POWER[s.hold];
+        s.last = `${name} זרק/ה ${s.hold}.`;
+        if (pw) { s.power = pw; s.phase = 'power'; s.hold = null; } else this.endTurn(ctx);
+      }
+    } else if (s.phase === 'power') {
+      const parse = v => { const [o, i] = String(v || '').split(':'); return s.hands[o] && Number(i) >= 0 && Number(i) < 4 && o !== pid ? [o, Number(i)] : null; };
+      if (m.act === 'skipPower') return this.endTurn(ctx);
+      if (s.power === 'own' && m.act === 'peekOwn' && idx >= 0 && idx < 4) { s.flash[pid] = `קלף ${idx + 1} שלך: ${s.hands[pid][idx]}`; s.last = `${name} הציץ/ה באחד הקלפים שלו/ה.`; this.endTurn(ctx); }
+      else if (s.power === 'other' && m.act === 'peekOther') { const t = parse(m.id); if (!t) return; s.flash[pid] = `${this.cardLabel(t[0], t[1], ctx)}: ${s.hands[t[0]][t[1]]}`; s.last = `${name} הציץ/ה בקלף של ${ctx.name(t[0])}.`; this.endTurn(ctx); }
+      else if (s.power === 'swap' && m.act === 'swapMine' && idx >= 0 && idx < 4) s.pick = idx;
+      else if (s.power === 'swap' && m.act === 'swapOther' && s.pick != null) {
+        const t = parse(m.id); if (!t) return;
+        [s.hands[pid][s.pick], s.hands[t[0]][t[1]]] = [s.hands[t[0]][t[1]], s.hands[pid][s.pick]];
+        s.last = `${name} החליף/ה בעיוורון את קלף ${s.pick + 1} שלו/ה עם ${this.cardLabel(t[0], t[1], ctx)}.`; this.endTurn(ctx);
+      }
+    }
+  },
+  skip(ctx) {
+    const s = ctx.g.s;
+    if (s.phase === 'peek') { s.phase = 'turn'; return; }
+    if (s.phase === 'drawn') { s.discard.push(s.hold); }
+    if (s.phase !== 'roundEnd') this.endTurn(ctx);
+  },
+};
+
+/* ============ ממלכת החיות ============ */
+const ANIMALS = { 1: ['ינשוף', '🦉', 'בוחרים שחקן ומנחשים איזו חיה יש לו (לא ינשוף). צדקתם? הוא בחוץ.'], 2: ['עכבר', '🐭', 'מציצים ביד של שחקן אחר.'],
+  3: ['דוב', '🐻', 'משווים ידיים בסתר עם שחקן אחר. הנמוך יוצא.'], 4: ['צב', '🐢', 'מוגנים מכל השחקנים עד התור הבא שלכם.'],
+  5: ['קוף', '🐒', 'שחקן כלשהו (גם אתם) זורק את היד ומושך קלף חדש.'], 6: ['שועל', '🦊', 'מחליפים יד עם שחקן אחר.'],
+  7: ['נחש', '🐍', 'חייבים לשחק אותו אם יש לכם ביד גם קוף או שועל.'], 8: ['אריה', '🦁', 'מי שזורק את האריה, יוצא מהסיבוב.'] };
+const animal = v => `${ANIMALS[v][1]} ${ANIMALS[v][0]} (${v})`;
+G.kingdom = {
+  id: 'kingdom', name: 'ממלכת החיות', icon: '🦁', min: 2, max: 4,
+  start(ctx) { const s = { round: 0, rounds: 3, order: shuffle(ctx.ids), tokens: zero(ctx.ids), starter: 0 }; this.deal(s); return s; },
+  deal(s) {
+    s.round++; s.deck = shuffle([1, 1, 1, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 8]); s.burn = s.deck.pop();
+    s.hands = {}; s.order.forEach(id => { s.hands[id] = [s.deck.pop()]; });
+    s.out = []; s.prot = []; s.discards = zero(s.order); s.order.forEach(id => { s.discards[id] = []; });
+    s.peek = {}; s.log = []; s.pending = null; s.cur = s.order[s.starter % s.order.length]; s.starter++; s.winners = [];
+    this.beginTurn(s);
+  },
+  beginTurn(s) { s.prot = s.prot.filter(id => id !== s.cur); s.hands[s.cur].push(s.deck.pop()); s.phase = 'play'; },
+  alive(s) { return s.order.filter(id => !s.out.includes(id)); },
+  targets(s, pid, self) { return this.alive(s).filter(id => (self || id !== pid) && !s.prot.includes(id)); },
+  knockOut(s, id) { if (s.out.includes(id)) return; s.out.push(id); s.discards[id].push(...s.hands[id]); s.hands[id] = []; },
+  view(ctx, pid) {
+    const s = ctx.g.s, me = pid === s.cur, hand = s.hands[pid] || [];
+    const table = { t: 'players', items: s.order.map(id => row(ctx, id, { right: '❤'.repeat(s.tokens[id]) || '0', sub: s.discards[id].map(v => ANIMALS[v][1]).join(' ') || 'עוד לא שיחק/ה',
+      tag: s.out.includes(id) ? 'בחוץ' : s.prot.includes(id) ? '🐢 מוגן/ת' : id === s.cur && s.phase !== 'roundEnd' ? 'בתור' : '', tone: s.out.includes(id) ? 'bad' : 'turn' })) };
+    const log = { t: 'list', items: s.log.slice(-4).reverse().map(t => ({ name: '•', text: t })) };
+    const peek = s.peek[pid] ? [{ t: 'secret', tone: 'word', title: 'רק את/ה רואה', text: s.peek[pid] }] : [];
+    if (s.phase === 'roundEnd') return { blocks: [say(`סוף סיבוב ${s.round} מתוך ${s.rounds}! ${s.winners.map(id => ctx.name(id)).join(' ו')} ${s.winners.length > 1 ? 'זכו' : 'זכה/תה'} בלב ❤.`),
+      { t: 'list', items: s.order.map(id => ({ name: ctx.name(id), color: ctx.p(id).color, text: s.out.includes(id) ? 'יצא/ה מהסיבוב' : `החזיק/ה ${animal(s.hands[id][0])}` })) }, table,
+      hostNext(ctx, pid, s.round < s.rounds ? 'לסיבוב הבא ▶' : 'לתוצאות 🏁')] };
+    const blocks = [say(s.log.length ? s.log[s.log.length - 1] : 'לכל אחד חיה אחת ביד. בתור מושכים חיה שנייה ומשחקים אחת מהשתיים. מי שנשאר אחרון, או עם החיה הכי חזקה כשהחפיסה נגמרת, זוכה בלב.'),
+      ...peek, text(`סיבוב ${s.round} מתוך ${s.rounds} · נשארו ${s.deck.length} קלפים`, true)];
+    if (hand.length) blocks.push(h(me && s.phase === 'play' ? 'איזו חיה לשחק?' : 'היד שלך'), { t: 'hand', act: me && s.phase === 'play' ? 'play' : null, items: hand.map((v, i) => ({ id: String(i), v: ANIMALS[v][1], sub: `${ANIMALS[v][0]} ${v}` })) },
+      { t: 'list', items: [...new Set(hand)].map(v => ({ name: animal(v), text: ANIMALS[v][2] })) });
+    else if (s.out.includes(pid)) blocks.push(text('יצאת מהסיבוב. אפשר לצפות.', true));
+    if (me && s.phase === 'target') blocks.push(h(`על מי להפעיל את ה${ANIMALS[s.pending][0]}?`), { t: 'choices', act: 'target', items: this.targets(s, pid, s.pending === 5).map(id => row(ctx, id)) });
+    if (me && s.phase === 'guess') blocks.push(h(`איזו חיה יש ל${ctx.name(s.target)}?`), { t: 'choices', act: 'guess', items: [2, 3, 4, 5, 6, 7, 8].map(v => ({ id: String(v), name: animal(v) })) });
+    if (!me) blocks.push(text(`התור של ${ctx.name(s.cur)}`, true));
+    blocks.push(log, table);
+    return { blocks };
+  },
+  endTurn(ctx) {
+    const s = ctx.g.s, alive = this.alive(s);
+    s.pending = null; s.target = null;
+    if (alive.length <= 1 || !s.deck.length) {
+      let best = -1;
+      alive.forEach(id => { const v = s.hands[id][0] * 100 + s.discards[id].reduce((a, b) => a + b, 0); if (v > best) best = v; });
+      s.winners = alive.filter(id => s.hands[id][0] * 100 + s.discards[id].reduce((a, b) => a + b, 0) === best);
+      s.winners.forEach(id => s.tokens[id]++);
+      s.phase = 'roundEnd'; s.peek = {};
+      return;
+    }
+    s.cur = nextIn(s.order, s.cur, id => !s.out.includes(id));
+    this.beginTurn(s);
+  },
+  act(ctx, pid, m) {
+    const s = ctx.g.s, name = ctx.name(pid);
+    if (s.phase === 'roundEnd' && m.act === 'next' && ctx.isHost(pid)) {
+      if (s.round >= s.rounds) return ctx.finish(rankAward(s.tokens), 'ממלכת החיות נסגרה להערב! הלבבות קובעים:');
+      return this.deal(s);
+    }
+    if (pid !== s.cur) return;
+    if (s.phase === 'play' && m.act === 'play') {
+      const i = Number(m.id), hand = s.hands[pid]; if (!(i === 0 || i === 1) || hand[i] === undefined) return;
+      const v = hand[i];
+      if (v !== 7 && hand.includes(7) && (hand.includes(5) || hand.includes(6))) return ctx.error(pid, 'יש לך נחש ביחד עם קוף או שועל, אז חייבים לשחק את הנחש.');
+      hand.splice(i, 1); s.discards[pid].push(v); delete s.peek[pid];
+      if (v === 8) { this.knockOut(s, pid); s.log.push(`${name} שיחק/ה את האריה ויצא/ה מהסיבוב! 🦁`); return this.endTurn(ctx); }
+      if (v === 4) { s.prot.push(pid); s.log.push(`${name} שיחק/ה צב ומוגן/ת עד התור הבא. 🐢`); return this.endTurn(ctx); }
+      if (v === 7) { s.log.push(`${name} שיחק/ה נחש. 🐍`); return this.endTurn(ctx); }
+      if (!this.targets(s, pid, v === 5).length) { s.log.push(`${name} שיחק/ה ${ANIMALS[v][0]}, אבל אין על מי להפעיל אותו.`); return this.endTurn(ctx); }
+      s.pending = v; s.phase = 'target';
+    } else if (s.phase === 'target' && m.act === 'target' && this.targets(s, pid, s.pending === 5).includes(m.id)) {
+      const t = m.id, tn = ctx.name(t), v = s.pending;
+      if (v === 1) { s.target = t; s.phase = 'guess'; return; }
+      if (v === 2) { s.peek[pid] = `ל${tn} יש ${animal(s.hands[t][0])}`; s.log.push(`${name} הציץ/ה ביד של ${tn}. 🐭`); }
+      if (v === 3) {
+        const a = s.hands[pid][0], b = s.hands[t][0];
+        s.peek[pid] = `ל${tn} יש ${animal(b)}`; s.peek[t] = `ל${name} יש ${animal(a)}`;
+        if (a === b) s.log.push(`${name} ו${tn} השוו ידיים. תיקו! 🐻`);
+        else { const loser = a < b ? pid : t; this.knockOut(s, loser); s.log.push(`${name} ו${tn} השוו ידיים. ${ctx.name(loser)} בחוץ! 🐻`); }
+      }
+      if (v === 5) {
+        const dropped = s.hands[t].pop(); s.discards[t].push(dropped);
+        if (dropped === 8) { s.out.push(t); s.log.push(`${tn} נאלץ/ה לזרוק את האריה ויצא/ה! 🐒`); }
+        else { s.hands[t].push(s.deck.length ? s.deck.pop() : s.burn); s.log.push(`${name} גרם/ה ל${tn} לזרוק ${ANIMALS[dropped][0]} ולמשוך חדש. 🐒`); }
+        delete s.peek[t];
+      }
+      if (v === 6) { [s.hands[pid], s.hands[t]] = [s.hands[t], s.hands[pid]]; delete s.peek[t]; s.log.push(`${name} החליף/ה ידיים עם ${tn}. 🦊`); }
+      this.endTurn(ctx);
+    } else if (s.phase === 'guess' && m.act === 'guess') {
+      const g = Number(m.id), t = s.target; if (!(g >= 2 && g <= 8)) return;
+      if (s.hands[t][0] === g) { this.knockOut(s, t); s.log.push(`${name} ניחש/ה ש${ctx.name(t)} מחזיק/ה ${ANIMALS[g][0]}, וצדק/ה! ${ctx.name(t)} בחוץ. 🦉`); }
+      else s.log.push(`${name} ניחש/ה ש${ctx.name(t)} מחזיק/ה ${ANIMALS[g][0]}, וטעה/תה. 🦉`);
+      this.endTurn(ctx);
+    }
+  },
+  skip(ctx) {
+    const s = ctx.g.s;
+    if (s.phase === 'play') { const hand = s.hands[s.cur]; const i = hand[0] === 8 ? 1 : 0; s.discards[s.cur].push(hand.splice(i, 1)[0]); s.log.push(`${ctx.name(s.cur)} דילג/ה על התור.`); this.endTurn(ctx); }
+    else if (s.phase === 'target' || s.phase === 'guess') this.endTurn(ctx);
+  },
+};
+
+/* ============ זיקית או נחש ============ */
+G.skull = {
+  id: 'skull', name: 'זיקית או נחש', icon: '🦎', min: 3, max: 6,
+  start(ctx) {
+    const s = { order: shuffle(ctx.ids), have: {}, wins: zero(ctx.ids), round: 0, maxRounds: 10, starter: null };
+    ctx.ids.forEach(id => { s.have[id] = { c: 3, s: 1 }; });
+    s.starter = s.order[0]; this.newRound(s); return s;
+  },
+  alive(s) { return s.order.filter(id => s.have[id].c + s.have[id].s > 0); },
+  newRound(s) {
+    s.round++; s.stacks = {}; s.hand = {}; s.flipped = {};
+    this.alive(s).forEach(id => { s.stacks[id] = []; s.hand[id] = { ...s.have[id] }; s.flipped[id] = 0; });
+    s.phase = 'place'; s.cur = this.alive(s).includes(s.starter) ? s.starter : this.alive(s)[0]; s.bid = null; s.result = ''; s.chal = null;
+  },
+  total(s) { return Object.values(s.stacks).reduce((a, st) => a + st.length, 0); },
+  view(ctx, pid) {
+    const s = ctx.g.s, alive = this.alive(s), inGame = alive.includes(pid), hand = s.hand[pid], stack = s.stacks[pid] || [];
+    const icon = k => k === 's' ? '🐍' : '🦎';
+    const table = { t: 'players', items: s.order.map(id => row(ctx, id, { right: '⭐'.repeat(s.wins[id]) || '0',
+      sub: !alive.includes(id) ? 'נשאר/ה בלי תחתיות' : `${s.stacks[id].length} מונחות${s.flipped[id] ? ` · נחשפו: ${s.stacks[id].slice(s.stacks[id].length - s.flipped[id]).map(icon).join('')}` : ''} · ${s.have[id].c + s.have[id].s} סה״כ`,
+      tag: s.bid && s.bid.passed.includes(id) ? 'פס' : s.bid && s.bid.by === id ? `הימור ${s.bid.n}` : id === s.cur && s.phase === 'turn' ? 'בתור' : '', tone: 'turn' })) };
+    const mine = inGame ? [h('הערימה שלך (רק את/ה רואה)'), { t: 'cards', items: stack.map(k => ({ v: icon(k), small: true })), empty: 'עוד לא הנחת' }, text(`ביד: ${'🦎'.repeat(hand.c)}${'🐍'.repeat(hand.s)}`, true)] : [];
+    const placeBtns = act => btns(hand.c ? btn('הנחת 🦎', act + 'c', 'main') : null, hand.s ? btn('הנחת 🐍', act + 's', 'ember') : null);
+    const blocks = [say(s.result || 'לכל אחד 3 זיקיות ונחש אחד. מניחים תחתיות הפוכות, ואז מהמרים כמה אפשר להפוך בלי לפגוש נחש. מי שמצליח פעמיים מנצח.'), text(`סבב ${s.round} · ${this.total(s)} תחתיות על השולחן`, true)];
+    if (s.phase === 'place') blocks.push(inGame && !stack.length ? placeBtns('place') : text('מחכים שכולם יניחו תחתית ראשונה…', true));
+    else if (s.phase === 'turn') {
+      if (pid === s.cur) {
+        if (hand.c + hand.s) blocks.push(h('להניח עוד תחתית'), placeBtns('add'));
+        blocks.push(h('או להתחיל הימור: כמה אפשר להפוך?'), { t: 'choices', act: 'bid', items: Array.from({ length: this.total(s) }, (_, i) => ({ id: String(i + 1), name: String(i + 1) })) });
+      } else blocks.push(text(`התור של ${ctx.name(s.cur)}`, true));
+    } else if (s.phase === 'bid') {
+      blocks.push(big(`${ctx.name(s.bid.by)} מהמר/ת על ${s.bid.n}`));
+      if (pid === s.cur) blocks.push({ t: 'choices', act: 'raise', items: [...Array.from({ length: this.total(s) - s.bid.n }, (_, i) => ({ id: String(s.bid.n + i + 1), name: `להעלות ל־${s.bid.n + i + 1}` })), { id: 'pass', name: 'פס' }] });
+      else blocks.push(text(`${ctx.name(s.cur)} מחליט/ה…`, true));
+    } else if (s.phase === 'flip') {
+      blocks.push(big(`${ctx.name(s.chal)} צריך/ה להפוך ${s.bid.n}`, `נחשפו ${s.found} עד עכשיו`));
+      if (pid === s.chal) blocks.push(h('של מי להפוך את התחתית העליונה?'), { t: 'choices', act: 'flip', items: alive.filter(id => id !== pid && s.flipped[id] < s.stacks[id].length).map(id => row(ctx, id, { sub: `${s.stacks[id].length - s.flipped[id]} הפוכות` })) });
+    } else if (s.phase === 'result') blocks.push(hostNext(ctx, pid, 'לסבב הבא ▶'));
+    return { blocks: [...blocks, ...mine, table] };
+  },
+  nextTurn(s) { s.cur = nextIn(s.order, s.cur, id => this.alive(s).includes(id)); },
+  startFlip(ctx) {
+    const s = ctx.g.s; s.chal = s.bid.by; s.phase = 'flip'; s.found = 0;
+    const own = s.stacks[s.chal]; s.flipped[s.chal] = own.length;
+    if (own.includes('s')) return this.fail(ctx, s.chal, `${ctx.name(s.chal)} הפך/ה את הערימה של עצמו/ה ומצא/ה את הנחש שלו/ה! 🐍`);
+    s.found = own.length;
+    if (s.found >= s.bid.n) this.success(ctx);
+  },
+  fail(ctx, by, msg) {
+    const s = ctx.g.s, hv = s.have[s.chal], pool = [...Array(hv.c).fill('c'), ...Array(hv.s).fill('s')], lost = pool[rnd(pool.length)];
+    hv[lost]--;
+    s.result = `${msg} ${ctx.name(s.chal)} מאבד/ת תחתית.${hv.c + hv.s ? '' : ' ונשאר/ה בלי תחתיות!'}`;
+    s.starter = by; s.phase = 'result';
+    if (this.alive(s).length <= 1 || s.round >= s.maxRounds) this.over(ctx);
+  },
+  success(ctx) {
+    const s = ctx.g.s; s.wins[s.chal]++;
+    s.result = `${ctx.name(s.chal)} הפך/ה ${s.bid.n} זיקיות בלי לפגוש נחש! ⭐`;
+    s.starter = s.chal; s.phase = 'result';
+    if (s.wins[s.chal] >= 2 || s.round >= s.maxRounds) this.over(ctx);
+  },
+  over(ctx) {
+    const s = ctx.g.s, pts = Object.fromEntries(s.order.map(id => [id, s.wins[id] * 10 + s.have[id].c + s.have[id].s]));
+    ctx.finish(rankAward(pts), `${s.result} סוף המשחק!`);
+  },
+  act(ctx, pid, m) {
+    const s = ctx.g.s, hand = s.hand[pid];
+    const place = k => { if (!hand || !hand[k]) return false; hand[k]--; s.stacks[pid].push(k); return true; };
+    if (s.phase === 'place' && (m.act === 'placec' || m.act === 'places') && hand && !s.stacks[pid].length) {
+      place(m.act.slice(-1));
+      if (this.alive(s).every(id => s.stacks[id].length)) s.phase = 'turn';
+    } else if (s.phase === 'result' && m.act === 'next' && ctx.isHost(pid)) this.newRound(s);
+    else if (pid !== s.cur && pid !== s.chal) return;
+    else if (s.phase === 'turn' && pid === s.cur) {
+      if ((m.act === 'addc' || m.act === 'adds') && place(m.act.slice(-1))) this.nextTurn(s);
+      else if (m.act === 'bid') {
+        const n = Number(m.id); if (!(n >= 1 && n <= this.total(s))) return;
+        s.bid = { n, by: pid, passed: [] };
+        if (n === this.total(s)) return this.startFlip(ctx);
+        s.phase = 'bid'; this.nextTurn(s);
+      }
+    } else if (s.phase === 'bid' && pid === s.cur && m.act === 'raise') {
+      if (m.id === 'pass') s.bid.passed.push(pid);
+      else { const n = Number(m.id); if (!(n > s.bid.n && n <= this.total(s))) return; s.bid.n = n; s.bid.by = pid; if (n === this.total(s)) return this.startFlip(ctx); }
+      const left = this.alive(s).filter(id => !s.bid.passed.includes(id));
+      if (left.length <= 1) return this.startFlip(ctx);
+      s.cur = nextIn(s.order, s.cur, id => left.includes(id));
+    } else if (s.phase === 'flip' && pid === s.chal && m.act === 'flip') {
+      const t = m.id, st = s.stacks[t]; if (!st || t === pid || s.flipped[t] >= st.length) return;
+      s.flipped[t]++;
+      const k = st[st.length - s.flipped[t]];
+      if (k === 's') return this.fail(ctx, t, `${ctx.name(pid)} הפך/ה את הנחש של ${ctx.name(t)}! 🐍`);
+      s.found++;
+      if (s.found >= s.bid.n) this.success(ctx);
+    }
+  },
+  skip(ctx) {
+    const s = ctx.g.s;
+    if (s.phase === 'place') { this.alive(s).forEach(id => { if (!s.stacks[id].length) { const k = s.hand[id].c ? 'c' : 's'; s.hand[id][k]--; s.stacks[id].push(k); } }); s.phase = 'turn'; }
+    else if (s.phase === 'turn') { this.act(ctx, s.cur, { act: 'bid', id: '1' }); }
+    else if (s.phase === 'bid') { this.act(ctx, s.cur, { act: 'raise', id: 'pass' }); }
+    else if (s.phase === 'flip') { const t = this.alive(s).find(id => id !== s.chal && s.flipped[id] < s.stacks[id].length); if (t) this.act(ctx, s.chal, { act: 'flip', id: t }); else this.success(ctx); }
+  },
+};
+
+/* ============ ארמון ============ */
+const RANK = v => ({ 11: 'J', 12: 'Q', 13: 'K', 14: 'A' }[v] || String(v));
+G.palace = {
+  id: 'palace', name: 'ארמון', icon: '🏰', min: 2, max: 6,
+  start(ctx) {
+    const deck = shuffle([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].flatMap(v => [v, v, v, v])), order = shuffle(ctx.ids), p = {};
+    order.forEach(id => { p[id] = { down: deck.splice(0, 3), up: deck.splice(0, 3), hand: deck.splice(0, 3) }; });
+    return { deck, pile: [], p, order, cur: order[0], done: [], last: '', moves: 0 };
+  },
+  top(s) { return s.pile.length ? s.pile[s.pile.length - 1] : null; },
+  ok(s, v) { const t = this.top(s); return t === null || v === 2 || v === 10 || v >= t; },
+  source(s, id) { const p = s.p[id]; return p.hand.length ? 'hand' : p.up.length ? 'up' : p.down.length ? 'down' : null; },
+  left(s, id) { const p = s.p[id]; return p.hand.length + p.up.length + p.down.length; },
+  view(ctx, pid) {
+    const s = ctx.g.s, me = pid === s.cur, p = s.p[pid], src = p && this.source(s, pid);
+    const t = this.top(s);
+    const table = { t: 'players', items: s.order.map(id => row(ctx, id, { sub: s.done.includes(id) ? `סיים/ה במקום ${s.done.indexOf(id) + 1}` : `יד ${s.p[id].hand.length} · גלויים ${s.p[id].up.map(RANK).join(' ') || '—'} · סגורים ${s.p[id].down.length}`, tag: id === s.cur ? 'בתור' : '', tone: 'turn' })) };
+    const blocks = [say(s.last || 'נפטרים מכל הקלפים: קודם מהיד, אחר כך מהגלויים ובסוף מהסגורים בעיוורון. משחקים קלף שווה או גבוה מהערימה. 2 מאפס, 10 שורף את הערימה. האחרון עם קלפים מפסיד.'),
+      { t: 'cards', items: t === null ? [] : [{ v: RANK(t) }], empty: 'הערימה ריקה' }, text(`בערימה ${s.pile.length} · בחפיסה ${s.deck.length}`, true)];
+    if (!p) return { blocks: [...blocks, table] };
+    if (s.done.includes(pid)) blocks.push(big('סיימת! 🏰'));
+    const canPlay = me && (src === 'hand' || src === 'up');
+    const cardsOf = arr => [...new Set(arr)].sort((a, b) => a - b);
+    blocks.push(h(src === 'up' ? 'הקלפים הגלויים שלך' : 'היד שלך'), { t: 'hand', act: canPlay ? 'play' : null, items: cardsOf(src === 'up' ? p.up : p.hand).map(v => ({ id: String(v), v: RANK(v), sub: `×${(src === 'up' ? p.up : p.hand).filter(x => x === v).length}`, disabled: canPlay && !this.ok(s, v) })) });
+    if (src === 'hand') blocks.push(text(`גלויים: ${p.up.map(RANK).join(' ') || '—'} · סגורים: ${p.down.length}`, true));
+    if (me && src === 'down') blocks.push(h('קלף עיוור: בחרו אחד'), { t: 'hand', act: 'blind', items: p.down.map((_, i) => ({ id: String(i), v: '?', back: true })) });
+    const has = canPlay && (src === 'up' ? p.up : p.hand).some(v => this.ok(s, v));
+    if (me && canPlay) blocks.push(btns(btn(`לקיחת הערימה (${s.pile.length})`, 'pickup', has ? 'ghost' : 'ember', { disabled: !s.pile.length })));
+    if (!me && !s.done.includes(pid)) blocks.push(text(`התור של ${ctx.name(s.cur)}`, true));
+    return { blocks: [...blocks, table] };
+  },
+  advance(ctx, again) {
+    const s = ctx.g.s;
+    if (!this.left(s, s.cur) && !s.done.includes(s.cur)) s.done.push(s.cur);
+    const alive = s.order.filter(id => !s.done.includes(id));
+    if (alive.length <= 1 || ++s.moves > 600) {
+      const rest = alive.slice().sort((a, b) => this.left(s, a) - this.left(s, b));
+      const finish = [...s.done, ...rest], aw = Object.fromEntries(s.order.map(id => [id, Math.max(0, 3 - finish.indexOf(id))]));
+      if (finish.length <= 3 && rest.length) aw[rest[rest.length - 1]] = 0;
+      return ctx.finish(aw, `${rest.length ? `${ctx.name(rest[rest.length - 1])} נשאר/ה אחרון/ה עם קלפים. ` : ''}${s.done.length ? `${ctx.name(s.done[0])} סיים/ה ראשון/ה!` : ''}`);
+    }
+    if (!again || s.done.includes(s.cur)) s.cur = nextIn(s.order, s.cur, id => !s.done.includes(id));
+  },
+  playCards(ctx, pid, cards, from) {
+    const s = ctx.g.s, v = cards[0];
+    s.pile.push(...cards);
+    const p = s.p[pid];
+    if (from === 'hand') while (p.hand.length < 3 && s.deck.length) p.hand.push(s.deck.pop());
+    const four = s.pile.length >= 4 && s.pile.slice(-4).every(x => x === v);
+    const name = ctx.name(pid);
+    if (v === 10 || four) { s.pile = []; s.last = `${name} שיחק/ה ${cards.map(RANK).join(' ')} ושרף/ה את הערימה! 🔥 ממשיך/ה לשחק.`; return this.advance(ctx, true); }
+    s.last = `${name} שיחק/ה ${cards.map(RANK).join(' ')}.`;
+    this.advance(ctx, false);
+  },
+  act(ctx, pid, m) {
+    const s = ctx.g.s; if (pid !== s.cur) return;
+    const p = s.p[pid], src = this.source(s, pid);
+    if (m.act === 'play' && (src === 'hand' || src === 'up')) {
+      const v = Number(m.id), arr = p[src]; if (!arr.includes(v) || !this.ok(s, v)) return;
+      const cards = arr.filter(x => x === v); p[src] = arr.filter(x => x !== v);
+      this.playCards(ctx, pid, cards, src);
+    } else if (m.act === 'pickup' && s.pile.length && (src === 'hand' || src === 'up')) {
+      p.hand.push(...s.pile); s.pile = []; s.last = `${ctx.name(pid)} לקח/ה את הערימה.`; this.advance(ctx, false);
+    } else if (m.act === 'blind' && src === 'down') {
+      const i = Number(m.id); if (!(i >= 0 && i < p.down.length)) return;
+      const v = p.down.splice(i, 1)[0];
+      if (this.ok(s, v)) this.playCards(ctx, pid, [v], 'down');
+      else { p.hand.push(...s.pile, v); s.pile = []; s.last = `${ctx.name(pid)} הפך/ה ${RANK(v)} בעיוורון, לא עבר, ולקח/ה את הערימה.`; this.advance(ctx, false); }
+    }
+  },
+  skip(ctx) {
+    const s = ctx.g.s, p = s.p[s.cur], src = this.source(s, s.cur);
+    if (src === 'down') return this.act(ctx, s.cur, { act: 'blind', id: '0' });
+    const arr = p[src] || [], v = arr.filter(x => this.ok(s, x)).sort((a, b) => a - b)[0];
+    if (v !== undefined) this.act(ctx, s.cur, { act: 'play', id: String(v) });
+    else if (s.pile.length) this.act(ctx, s.cur, { act: 'pickup' });
+    else this.advance(ctx, false);
+  },
+};
+
+/* ============ הסינדיקט ============ */
+const SYN = { 5: [2, [2, 3, 2, 3, 3]], 6: [2, [2, 3, 4, 3, 4]], 7: [3, [2, 3, 3, 4, 4]], 8: [3, [3, 4, 4, 5, 5]], 9: [3, [3, 4, 4, 5, 5]], 10: [4, [3, 4, 4, 5, 5]] };
+G.syndicate = {
+  id: 'syndicate', name: 'הסינדיקט', icon: '🕴️', min: 5, max: 10,
+  start(ctx) {
+    const n = ctx.ids.length, [k, sizes] = SYN[n];
+    return { phase: 'roles', order: shuffle(ctx.ids), spies: shuffle(ctx.ids).slice(0, k), sizes, mission: 0, results: [], rejects: 0, leader: 0, team: [], votes: {}, lastVotes: null, plays: {}, msg: '' };
+  },
+  need(s) { return s.sizes[s.mission]; },
+  twoFails(s) { return s.order.length >= 7 && s.mission === 3; },
+  role(ctx, s, pid) {
+    const spy = s.spies.includes(pid);
+    return { t: 'secret', tone: spy ? 'imp' : 'word', title: 'התפקיד שלך', text: spy ? '🕶️ מסתנן/ת' : '🕴️ סוכן/ת', hidden: true,
+      sub: spy ? `אתם מנסים להכשיל 3 משימות. המסתננים: ${s.spies.map(id => ctx.name(id)).join(', ')}.` : 'אתם מנסים להצליח ב־3 משימות. יש מסתננים ביניכם, ורק הם יכולים להכשיל משימה.' };
+  },
+  view(ctx, pid) {
+    const s = ctx.g.s, leader = s.order[s.leader];
+    const track = big(s.sizes.map((n, i) => s.results[i] === true ? '✅' : s.results[i] === false ? '❌' : i === s.mission ? `[${n}]` : n).join('  '), `משימה ${s.mission + 1} · דחיות ברצף: ${s.rejects}/5`);
+    const table = { t: 'players', items: s.order.map(id => row(ctx, id, { tag: id === leader ? 'מוביל/ה' : s.team.includes(id) ? 'בצוות' : '', tone: id === leader ? 'turn' : 'ok',
+      sub: s.lastVotes ? (s.lastVotes[id] === 'yes' ? 'הצביע/ה בעד' : s.lastVotes[id] === 'no' ? 'הצביע/ה נגד' : '') : '' })) };
+    const role = this.role(ctx, s, pid);
+    if (s.phase === 'roles') return { blocks: [say('סוכנים נגד מסתננים. בכל משימה המוביל בוחר צוות, כולם מצביעים אם לאשר, והצוות יוצא למשימה בסתר. מסתנן אחד מספיק כדי להכשיל.'), role,
+      ctx.isHost(pid) ? btns(btn('▶ מתחילים', 'begin')) : text('מחכים למארח…', true)] };
+    const blocks = [say(s.msg || `${ctx.name(leader)} מוביל/ה את המשימה.`), track, role];
+    if (s.phase === 'propose') {
+      if (pid === leader) blocks.push(h(`בחרו ${this.need(s)} לצוות`), { t: 'choices', act: 'toggle', selected: s.team, items: s.order.map(id => row(ctx, id)) },
+        btns(btn(`שליחה להצבעה (${s.team.length}/${this.need(s)})`, 'propose', 'main', { disabled: s.team.length !== this.need(s) })));
+      else blocks.push(text(`${ctx.name(leader)} בוחר/ת צוות של ${this.need(s)}: ${s.team.map(id => ctx.name(id)).join(', ') || '…'}`, true));
+    } else if (s.phase === 'vote') {
+      blocks.push(big(`הצוות: ${s.team.map(id => ctx.name(id)).join(', ')}`), { t: 'choices', act: 'vote', selected: s.votes[pid], items: [{ id: 'yes', name: '👍 מאשר/ת' }, { id: 'no', name: '👎 נגד' }] },
+        text(`הצביעו ${Object.keys(s.votes).length} מתוך ${s.order.length}`, true));
+    } else if (s.phase === 'mission') {
+      if (s.team.includes(pid) && !s.plays[pid]) blocks.push(h('יצאת למשימה. מה עושים?'), btns(btn('✅ הצלחה', 'success', 'main'), s.spies.includes(pid) ? btn('❌ הכשלה', 'fail', 'ember') : null));
+      else blocks.push(text(`הצוות במשימה… ${Object.keys(s.plays).length}/${s.team.length}`, true));
+    } else if (s.phase === 'result') blocks.push(hostNext(ctx, pid, 'למשימה הבאה ▶'));
+    return { blocks: [...blocks, table] };
+  },
+  over(ctx, spiesWin, why) {
+    const s = ctx.g.s;
+    ctx.finish(Object.fromEntries(s.order.map(id => [id, s.spies.includes(id) === spiesWin ? 3 : 0])), `${why} ${spiesWin ? 'המסתננים' : 'הסוכנים'} ניצחו! המסתננים היו ${s.spies.map(id => ctx.name(id)).join(', ')}.`);
+  },
+  closeVote(ctx) {
+    const s = ctx.g.s, yes = Object.values(s.votes).filter(v => v === 'yes').length, no = Object.values(s.votes).filter(v => v === 'no').length;
+    s.lastVotes = { ...s.votes }; s.votes = {};
+    if (yes > no) { s.phase = 'mission'; s.plays = {}; s.rejects = 0; s.msg = `הצוות אושר ${yes} מול ${no}. יוצאים למשימה!`; return; }
+    s.rejects++;
+    if (s.rejects >= 5) return this.over(ctx, true, 'חמש דחיות ברצף. הסינדיקט משותק.');
+    s.msg = `הצוות נדחה ${no} מול ${yes}. ההובלה עוברת הלאה.`; s.team = []; s.leader = (s.leader + 1) % s.order.length; s.phase = 'propose';
+  },
+  closeMission(ctx) {
+    const s = ctx.g.s, fails = Object.values(s.plays).filter(v => v === 'fail').length, failed = fails >= (this.twoFails(s) ? 2 : 1);
+    s.results.push(!failed);
+    s.msg = failed ? `המשימה נכשלה! ${fails} ${fails === 1 ? 'קלף הכשלה' : 'קלפי הכשלה'}.` : `המשימה הצליחה!${fails ? ` (היה ${fails} קלף הכשלה, אבל צריך 2)` : ''}`;
+    const ok = s.results.filter(Boolean).length, bad = s.results.length - ok;
+    if (ok >= 3) return this.over(ctx, false, 'שלוש משימות הצליחו.');
+    if (bad >= 3) return this.over(ctx, true, 'שלוש משימות נכשלו.');
+    s.phase = 'result';
+  },
+  act(ctx, pid, m) {
+    const s = ctx.g.s, leader = s.order[s.leader];
+    if (s.phase === 'roles' && m.act === 'begin' && ctx.isHost(pid)) { s.phase = 'propose'; return; }
+    if (s.phase === 'propose' && pid === leader) {
+      if (m.act === 'toggle' && s.order.includes(m.id)) { if (s.team.includes(m.id)) s.team = s.team.filter(x => x !== m.id); else if (s.team.length < this.need(s)) s.team.push(m.id); }
+      else if (m.act === 'propose' && s.team.length === this.need(s)) { s.phase = 'vote'; s.votes = {}; s.msg = `${ctx.name(pid)} הציע/ה צוות. מצביעים!`; }
+    } else if (s.phase === 'vote' && m.act === 'vote' && (m.id === 'yes' || m.id === 'no')) {
+      s.votes[pid] = m.id; if (s.order.every(id => s.votes[id])) this.closeVote(ctx);
+    } else if (s.phase === 'mission' && s.team.includes(pid) && !s.plays[pid] && (m.act === 'success' || (m.act === 'fail' && s.spies.includes(pid)))) {
+      s.plays[pid] = m.act; if (s.team.every(id => s.plays[id])) this.closeMission(ctx);
+    } else if (s.phase === 'result' && m.act === 'next' && ctx.isHost(pid)) {
+      s.mission++; s.leader = (s.leader + 1) % s.order.length; s.team = []; s.lastVotes = null; s.msg = ''; s.phase = 'propose';
+    }
+  },
+  skip(ctx) {
+    const s = ctx.g.s;
+    if (s.phase === 'roles') s.phase = 'propose';
+    else if (s.phase === 'propose') { s.team = shuffle(s.order).slice(0, this.need(s)); s.phase = 'vote'; s.votes = {}; }
+    else if (s.phase === 'vote') { s.order.forEach(id => { if (!s.votes[id]) s.votes[id] = 'yes'; }); this.closeVote(ctx); }
+    else if (s.phase === 'mission') { s.team.forEach(id => { if (!s.plays[id]) s.plays[id] = 'success'; }); this.closeMission(ctx); }
+  },
+};
+
+/* ============ אולפן הצלילים ============ */
+G.sounds = {
+  id: 'sounds', name: 'אולפן הצלילים', icon: '🎙️', min: 3, max: 10,
+  start(ctx) { return { phase: 'ready', order: shuffle(ctx.ids), i: 0, pool: shuffle(C.SOUNDS), sound: '', options: [], answers: {}, pts: zero(ctx.ids), end: 0 }; },
+  view(ctx, pid) {
+    const s = ctx.g.s, perf = s.order[s.i], me = pid === perf, scores = scoreRows(ctx, s.order, s.pts, id => ({ tag: id === perf ? 'מחקה' : (s.phase === 'live' && s.answers[id] ? '✔' : '') }));
+    if (s.phase === 'ready') return { blocks: [say('מישהו מחקה צליל בלי מילים, וכל השאר בוחרים מהטלפון מה זה. מי שעונה נכון ומהר מקבל יותר נקודות.'), text(`תור ${s.i + 1} מתוך ${s.order.length}`, true),
+      me ? btns(btn('▶ מוכן/ה, תנו צליל', 'go')) : big(`${ctx.name(perf)} מתכונן/ת`), scores] };
+    if (s.phase === 'live') {
+      if (me) return { blocks: [timer(s.end), { t: 'secret', tone: 'word', title: 'חקו בקול, בלי מילים:', text: s.sound }, text(`ענו ${Object.keys(s.answers).length} מתוך ${s.order.length - 1}`, true)] };
+      return { blocks: [timer(s.end), big(`${ctx.name(perf)} מחקה…`, 'מה זה?'), s.answers[pid] ? text('ענית! מחכים לשאר…', true) : { t: 'choices', act: 'answer', items: s.options.map(o => ({ id: o, name: o })) }] };
+    }
+    const right = s.order.filter(id => s.answers[id] && s.answers[id].id === s.sound);
+    return { blocks: [say(`זה היה "${s.sound}"! ${right.length ? `ניחשו נכון: ${right.map(id => ctx.name(id)).join(', ')}.` : 'אף אחד לא זיהה.'}`), scores,
+      (ctx.isHost(pid) || me) ? btns(btn(s.i + 1 < s.order.length ? 'לצליל הבא ▶' : 'לתוצאות 🏁', 'next')) : text('מחכים להמשך…', true)] };
+  },
+  reveal(s) {
+    const perf = s.order[s.i];
+    const right = Object.entries(s.answers).filter(([, a]) => a.id === s.sound).sort((a, b) => a[1].t - b[1].t).map(([id]) => id);
+    right.forEach((id, k) => { s.pts[id] += [3, 2][k] || 1; });
+    s.pts[perf] += Math.min(3, right.length);
+    s.phase = 'reveal';
+  },
+  act(ctx, pid, m) {
+    const s = ctx.g.s, perf = s.order[s.i];
+    if (s.phase === 'ready' && m.act === 'go' && pid === perf) {
+      if (s.pool.length < 5) s.pool = shuffle(C.SOUNDS);
+      s.sound = s.pool.pop(); s.options = shuffle([s.sound, ...shuffle(C.SOUNDS.filter(x => x !== s.sound)).slice(0, 4)]);
+      s.answers = {}; s.phase = 'live'; s.end = Date.now() + 25000; const i = s.i;
+      ctx.later(25000, () => { if (s.i === i && s.phase === 'live') this.reveal(s); });
+    } else if (s.phase === 'live' && m.act === 'answer' && pid !== perf && !s.answers[pid] && s.options.includes(m.id)) {
+      s.answers[pid] = { id: m.id, t: Date.now() };
+      if (s.order.every(id => id === perf || s.answers[id])) this.reveal(s);
+    } else if (s.phase === 'reveal' && m.act === 'next' && (pid === perf || ctx.isHost(pid))) this.next(ctx);
+  },
+  next(ctx) {
+    const s = ctx.g.s;
+    if (s.i + 1 >= s.order.length) return ctx.finish(rankAward(s.pts), 'האולפן נסגר! הנה האוזניים הכי חדות בחדר:');
+    s.i++; s.phase = 'ready';
+  },
+  skip(ctx) { const s = ctx.g.s; if (s.phase === 'live') this.reveal(s); else this.next(ctx); },
+};
+
 module.exports = { GAMES: G, rankAward };

@@ -201,6 +201,23 @@ footer{padding-block:26px;color:var(--muted);font-size:14px;display:flex;gap:16p
 .pc{min-width:48px;height:68px;padding:0 6px;border-radius:9px;background:var(--paper);color:#1a1816;display:grid;place-items:center;font-family:var(--ui);font-size:24px;font-weight:700;box-shadow:0 4px 0 #0006;animation:pop .25s}
 .pc.small{min-width:42px;height:56px;font-size:18px}
 .pc.dup{background:var(--bad);color:#fff}
+.pc:has(small){align-content:center;gap:2px;line-height:1}
+.pc small{display:block;font-family:var(--body);font-size:11px;font-weight:700;color:#6b625a;line-height:1}
+.pc.back{background:repeating-linear-gradient(45deg,var(--brown) 0 6px,var(--tan) 6px 12px);box-shadow:0 4px 0 #0006,inset 0 0 0 3px var(--paper)}
+.pc.tap{cursor:pointer;outline:2px solid transparent}
+.pc.tap:active{transform:translateY(3px)}
+.pc.tap:hover{outline-color:var(--tan)}
+.pc.dim{opacity:.35}
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
+.tile{display:grid;place-items:center;min-height:52px;padding:4px 2px;border-radius:9px;background:var(--paper);color:#1a1816;font-weight:700;font-size:clamp(11px,3.3vw,15px);text-align:center;line-height:1.1;overflow-wrap:anywhere;border:3px solid transparent}
+button.tile{cursor:pointer}
+button.tile:active{transform:scale(.96)}
+.spy .tile.k-A{border-color:#8a847d}.spy .tile.k-B{border-color:var(--brown)}.spy .tile.k-X{border-color:#000;background:#d9cfc2}
+.tile.open.k-A{background:#8a847d;color:var(--paper)}
+.tile.open.k-B{background:var(--brown);color:var(--paper)}
+.tile.open.k-N{background:#4a4540;color:#a39b91}
+.tile.open.k-X{background:#000;color:var(--ember)}
+.tile.open{opacity:.9}
 @keyframes pop{from{transform:translateY(-12px) rotate(-6deg);opacity:0}}
 .list{display:grid;gap:6px}
 .li{display:flex;gap:8px;align-items:baseline;background:var(--card);border-radius:10px;padding:8px 12px}
@@ -290,9 +307,16 @@ const sigi = () => `<svg class="sigi" viewBox="0 0 120 170" aria-hidden="true">
 const GAMES = [
   { id: 'seven', name: 'שבע בר מזל', icon: '🎰', min: 2, max: 10, cat: 'cards', d: 'מושכים קלפים ואוספים נקודות. מספר כפול שורף את הסבב, שבעה קלפים שונים שווים בונוס ענק.' },
   { id: 'stash', name: 'אוצר או כלוב', icon: '💎', min: 3, max: 8, cat: 'cards', d: 'נכנסים למערה ואוספים יהלומים. כל אחד מחליט בסתר: להמשיך פנימה או לצאת עם השלל.' },
+  { id: 'nothanks', name: 'פראייר מי לוקח', icon: '🪙', min: 3, max: 7, cat: 'cards', d: 'קלף במרכז ואסימונים על השולחן. לוקחים אותו, או משלמים אסימון ומעבירים הלאה? הניקוד הנמוך מנצח.' },
+  { id: 'golf', name: 'חתולים וכלבים', icon: '🐱', min: 2, max: 6, cat: 'cards', d: 'ארבעה קלפים הפוכים לכל אחד. זוכרים, מחליפים, ומכריזים "חתולים!" כשהסכום שלכם הכי נמוך.' },
+  { id: 'kingdom', name: 'ממלכת החיות', icon: '🦁', min: 2, max: 4, cat: 'cards', d: 'חיה סודית ביד ולכל חיה כוח משלה. מנחשים, מציצים, מחליפים ומוציאים יריבים מהסיבוב.' },
+  { id: 'skull', name: 'זיקית או נחש', icon: '🦎', min: 3, max: 6, cat: 'cards', d: 'מניחים תחתיות הפוכות ומהמרים כמה אפשר להפוך בלי לפגוש נחש. מעזים להעלות?' },
+  { id: 'palace', name: 'ארמון', icon: '🏰', min: 2, max: 6, cat: 'cards', d: 'נפטרים מכל הקלפים: מהיד, מהגלויים ובסוף מהסגורים בעיוורון. האחרון עם קלפים מפסיד.' },
   { id: 'imposter', name: 'המתחזה', icon: '🕵️', min: 3, max: 12, cat: 'bluff', d: 'כולם מקבלים את אותה מילה חוץ מאחד. רמז אחרי רמז, ואז מצביעים מי מזייף.' },
   { id: 'village', name: 'הכפר בלילה', icon: '🌙', min: 5, max: 12, cat: 'bluff', d: 'רוצחים, רופאה ובלש. בלילה פועלים בסתר בטלפון, ביום מתווכחים ומצביעים מי יוצא.' },
   { id: 'fake', name: 'עובדה או בדיה', icon: '🧐', min: 3, max: 12, cat: 'bluff', d: 'עובדה אמיתית עם חלק חסר. כותבים תשובה מזויפת ומשכנעת, ומנסים למצוא את האמת.' },
+  { id: 'syndicate', name: 'הסינדיקט', icon: '🕴️', min: 5, max: 10, cat: 'bluff', d: 'סוכנים נגד מסתננים. בוחרים צוות, מצביעים, ויוצאים למשימה בסתר. מסתנן אחד מספיק כדי להכשיל.' },
+  { id: 'codes', name: 'מילות קוד', icon: '🗝️', min: 4, max: 10, cat: 'words', d: 'לוח של 25 מילים. ראש הסוכנות רומז במילה ומספר, והצוות מנחש. רק אל תפגעו במלכודת.' },
   { id: 'mime', name: 'פנטומימה', icon: '🎭', min: 3, max: 16, cat: 'words', d: '60 שניות להציג כמה שיותר מילים בלי לדבר. מי שמנחש וגם המציג מקבלים נקודה.' },
   { id: 'race', name: 'ספרינט מילים', icon: '⏱️', min: 4, max: 16, cat: 'words', d: 'האפורים נגד החומים. מסבירים מילה לקבוצה בלי להגיד אותה, 60 שניות לתור.' },
   { id: 'scale', name: 'בין הקצוות', icon: '📏', min: 2, max: 12, cat: 'words', d: 'נקודה סודית על סקאלה בין שני הפכים. רמז אחד, וכולם מכוונים מהטלפון.' },
@@ -301,6 +325,9 @@ const GAMES = [
   { id: 'bomb', name: 'פצצה מתקתקת', icon: '💣', min: 3, max: 12, cat: 'party', d: 'קטגוריה על המסך והפצצה עוברת מטלפון לטלפון. עונים מהר לפני שהיא מתפוצצת.' },
   { id: 'meme', name: 'מפעל הממים', icon: '😂', min: 3, max: 14, cat: 'party', d: 'סצנה מצחיקה, כל אחד כותב כיתוב, והחדר מדרג בלי לדעת מי כתב.' },
   { id: 'dare', name: 'אתגר מהכובע', icon: '🎩', min: 2, max: 20, cat: 'party', d: 'סיגי שולף אתגר מצחיק, ומי שמבצע מול כולם וקיבל אישור מהחדר מקבל נקודה.' },
+  { id: 'roast', name: 'צלייה חמה', icon: '🔥', min: 3, max: 16, cat: 'party', d: 'דו־קרבות של בדיחות: אותה שאלה, שתי תשובות, והחדר מצביע מי הצחיק יותר.' },
+  { id: 'herd', name: 'התאמת המונים', icon: '🐑', min: 3, max: 16, cat: 'party', d: 'שאלה פתוחה ותשובה בסתר. כל מי שבקבוצה הכי גדולה של תשובות זהות מקבל נקודה.' },
+  { id: 'sounds', name: 'אולפן הצלילים', icon: '🎙️', min: 3, max: 10, cat: 'party', d: 'מחקים צליל בלי מילים, וכולם בוחרים מהר מתוך חמש אפשרויות. מהר יותר, יותר נקודות.' },
 ];
 const CATS = [
   { id: 'cards', name: 'קלפים ומזל', d: 'כל החלטה היא הימור קטן: למשוך עוד, לעצור, או להעז.' },
@@ -399,7 +426,7 @@ function header() {
 }
 
 function home() {
-  const featured = ['seven', 'imposter', 'draw', 'bomb', 'village', 'mime', 'meme'].map(id => GAMES.find(g => g.id === id));
+  const featured = ['seven', 'imposter', 'codes', 'draw', 'bomb', 'roast', 'village', 'herd'].map(id => GAMES.find(g => g.id === id));
   return header() + `<main class="wrap">
   <section class="hero">
     <div>
@@ -548,9 +575,19 @@ function renderBlock(b) {
     case 'timer': return `<div class="timer" data-end="${b.end}">--</div>`;
     case 'buttons': return `<div class="pickgrid" style="grid-template-columns:repeat(${Math.min(b.items.length, 2)},1fr)">${b.items.map(it =>
       `<button class="btn btn-${it.style || 'main'}" data-act="${esc(it.act)}" ${it.disabled ? 'disabled' : ''}>${esc(it.label)}</button>`).join('')}</div>`;
-    case 'input': return `<form class="field" data-form="act" data-act="${esc(b.act)}"><input class="txt" data-input="${esc(b.act)}" maxlength="${b.max || 40}" placeholder="${esc(b.placeholder)}" autocomplete="off" enterkeyhint="send" ${b.focus ? 'data-autofocus' : ''}><button class="btn btn-main btn-sm">${esc(b.button || 'שליחה')}</button></form>`;
-    case 'choices': return `<div class="choices">${b.items.map(it => `<button class="choice ${b.selected === it.id ? 'sel' : ''}" data-act="${esc(b.act)}" data-id="${esc(it.id)}" ${it.disabled ? 'disabled' : ''}>
-      ${it.color ? avatar(it.name, it.color) : ''}<span>${esc(it.name)}${it.sub ? `<small>${esc(it.sub)}</small>` : ''}</span>${b.selected === it.id ? '<span style="margin-inline-start:auto">✔</span>' : ''}</button>`).join('')}</div>`;
+    case 'input': return `<form class="field" data-form="act" data-act="${esc(b.act)}" ${b.id ? `data-id="${esc(b.id)}"` : ''}><input class="txt" data-input="${esc(b.act)}" maxlength="${b.max || 40}" placeholder="${esc(b.placeholder)}" autocomplete="off" enterkeyhint="send" ${b.focus ? 'data-autofocus' : ''}><button class="btn btn-main btn-sm">${esc(b.button || 'שליחה')}</button></form>`;
+    case 'choices': {
+      const isSel = id => Array.isArray(b.selected) ? b.selected.includes(id) : b.selected === id;
+      return `<div class="choices">${b.items.map(it => `<button class="choice ${isSel(it.id) ? 'sel' : ''}" data-act="${esc(b.act)}" data-id="${esc(it.id)}" ${it.disabled ? 'disabled' : ''}>
+      ${it.color ? avatar(it.name, it.color) : ''}<span>${esc(it.name)}${it.sub ? `<small>${esc(it.sub)}</small>` : ''}</span>${isSel(it.id) ? '<span style="margin-inline-start:auto">✔</span>' : ''}</button>`).join('')}</div>`;
+    }
+    case 'hand': return `<div class="cards">${b.items.map(c => b.act && !c.disabled
+      ? `<button class="pc ${c.back ? 'back' : ''} tap" data-act="${esc(b.act)}" data-id="${esc(c.id)}">${c.back ? '' : esc(c.v)}${c.sub ? `<small>${esc(c.sub)}</small>` : ''}</button>`
+      : `<span class="pc ${c.back ? 'back' : ''} ${c.disabled ? 'dim' : ''}">${c.back ? '' : esc(c.v)}${c.sub ? `<small>${esc(c.sub)}</small>` : ''}</span>`).join('')}</div>`;
+    case 'grid': return `<div class="grid ${b.spy ? 'spy' : ''}">${b.items.map(c => {
+      const cls = `tile ${c.k ? 'k-' + c.k : ''} ${c.open ? 'open' : ''}`;
+      return b.act && !c.open ? `<button class="${cls}" data-act="${esc(b.act)}" data-id="${esc(c.id)}">${esc(c.text)}</button>` : `<span class="${cls}">${esc(c.text)}</span>`;
+    }).join('')}</div>`;
     case 'players': return `<div class="plist">${b.items.map((p, i) => `<div class="prow ${p.id === me ? 'me' : ''} ${p.off ? 'off' : ''}">
       ${view.screen === 'lobby' || view.screen === 'end' ? `<span class="muted" style="width:24px">#${i + 1}</span>` : ''}${avatar(p.name, p.color)}
       <span class="nm">${esc(p.name)}${p.host ? ' 👑' : ''}${p.id === me ? ' <span class="muted">(אני)</span>' : ''}${p.sub || p.off ? `<small>${p.off ? 'מנותק/ת' : esc(p.sub)}</small>` : ''}</span>
@@ -686,7 +723,7 @@ document.addEventListener('click', e => {
   if (a && a.tagName !== 'FORM') {
     if (a.classList.contains('pick') && a.classList.contains('off')) { const n = view.players.length; return toast(Number(a.dataset.min) > n ? `${a.dataset.name} צריך לפחות ${a.dataset.min} שחקנים מחוברים` : `${a.dataset.name} מתאים לעד ${a.dataset.max} שחקנים`); }
     const m = { type: 'act', act: a.dataset.act };
-    if (a.dataset.id) m.id = a.dataset.id;
+    if (a.dataset.id !== undefined) m.id = a.dataset.id;
     if (a.dataset.k) m.k = a.dataset.k;
     if (a.dataset.slider) m.value = Number($('#' + a.dataset.slider).value);
     send(m);
@@ -709,7 +746,7 @@ document.addEventListener('submit', e => {
   } else if (kind === 'act') {
     const inp = f.querySelector('input'), value = inp.value.trim(); if (!value) return;
     justSent = true; inp.value = '';
-    send({ type: 'act', act: f.dataset.act, value });
+    send({ type: 'act', act: f.dataset.act, value, ...(f.dataset.id ? { id: f.dataset.id } : {}) });
   }
 });
 document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-reveal][tabindex]')) { e.preventDefault(); e.target.click(); } });
