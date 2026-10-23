@@ -8,7 +8,10 @@ const { WebSocketServer } = require('ws');
 const { GAMES, rankAward } = require('./games');
 
 const PORT = process.env.PORT || 3000;
-const PUB = path.join(__dirname, 'public');
+// site files live in public/, but also work if they were uploaded next to server.js
+const PUB_DIR = path.join(__dirname, 'public');
+const PUB = fs.existsSync(path.join(PUB_DIR, 'index.html')) ? PUB_DIR : __dirname;
+const ROOT_FILES = new Set(['/index.html', '/icon.svg', '/manifest.webmanifest']);
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json', '.json': 'application/json' };
 const COLORS = ['#e8c39e', '#d9774a', '#9fb3a8', '#c9a227', '#b7a6c9', '#8fb0c9', '#d48f8f', '#a3c48a', '#e0b07a', '#9a9a9a', '#c98fb0', '#7fc4b8', '#d1c25e', '#b08b6e', '#8e9fd4', '#e09a6b'];
@@ -20,6 +23,7 @@ const server = http.createServer((req, res) => {
   try { p = decodeURIComponent(req.url.split('?')[0]); } catch (e) { res.writeHead(400); return res.end(); }
   if (p === '/health') { res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end('ok'); }
   if (p === '/' || !path.extname(p)) p = '/index.html'; // /ABCD share links open the app
+  if (PUB === __dirname && !ROOT_FILES.has(p)) { res.writeHead(404); return res.end('not found'); } // never serve the server's own code
   const file = path.join(PUB, path.normalize(p));
   if (!file.startsWith(PUB)) { res.writeHead(403); return res.end(); }
   fs.readFile(file, (err, data) => {
