@@ -44,7 +44,8 @@ function newCode() {
 const clean = (s, n) => String(s || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, n);
 
 function makeRoom() {
-  const room = { code: newCode(), hostId: null, players: [], scores: {}, gamesPlayed: 0, screen: 'lobby', game: null, award: null, timers: new Set(), touched: Date.now() };
+  const room = { code: newCode(), hostId: null, players: [], scores: {}, gamesPlayed: 0, screen: 'lobby', game: null, award: null, timers: new Set(), touched: Date.now(),
+    randomMode: false, played: [], rolled: null };
   rooms.set(room.code, room);
   return room;
 }
@@ -98,7 +99,23 @@ function startGame(room, gameId) {
   clearTimers(room);
   room.game = { id: gameId, ids, s: null };
   room.screen = 'game';
+  room.played.push(gameId);
   room.game.s = G.start(ctxFor(room));
+  return true;
+}
+
+// draw a game that fits the players online; avoid repeats until every fitting game was played
+function startRandom(room) {
+  const n = room.players.filter(isOn).length;
+  const fit = Object.values(GAMES).filter(G => n >= G.min && n <= G.max).map(G => G.id);
+  if (!fit.length) return false;
+  let fresh = fit.filter(id => !room.played.includes(id));
+  if (!fresh.length) { room.played = room.played.slice(-1); fresh = fit.filter(id => !room.played.includes(id)); }
+  if (!fresh.length) fresh = fit;
+  const id = fresh[crypto.randomInt(fresh.length)];
+  if (!startGame(room, id)) return false;
+  room.rolled = { id, name: GAMES[id].name, icon: GAMES[id].icon, at: Date.now() };
+  return true;
 }
 
 function finishGame(room, award, note) {
@@ -120,18 +137,23 @@ function board(room) {
 function viewFor(room, pid) {
   const me = P(room, pid);
   const host = pid === room.hostId;
-  const base = { code: room.code, me: pid, host, hostName: (P(room, room.hostId) || {}).name, players: room.players.map(p => ({ id: p.id, name: p.name, color: p.color })) };
+  const base = { code: room.code, me: pid, host, hostName: (P(room, room.hostId) || {}).name, players: room.players.map(p => ({ id: p.id, name: p.name, color: p.color })),
+    rolled: room.rolled, randomMode: room.randomMode };
   const n = room.players.filter(isOn).length;
 
   if (room.screen === 'lobby') {
     const leader = room.gamesPlayed ? board(room)[0] : null;
     return { ...base, screen: 'lobby', title: 'חדר ' + room.code, blocks: [
       { t: 'say', text: room.gamesPlayed ? `שיחקתם ${room.gamesPlayed} ${room.gamesPlayed === 1 ? 'משחק' : 'משחקים'}. ${leader.name} בראש! מה הבא?` :
-        n < 2 ? 'החדר פתוח! שלחו לחברים את הקוד או הקישור, ואני כבר אכריז עליהם.' : `${n} שחקנים בחדר. ${host ? 'בחרו משחק ונתחיל.' : 'המארח בוחר משחק.'}` },
+        n < 2 ? 'החדר פתוח! שלחו לחברים את הקוד או הקישור, ואני כבר אכריז עליהם.' : `${n} שחקנים בחדר. ${host ? 'בחרו משחק, או תנו לי להגריל.' : 'המארח בוחר משחק.'}` },
       { t: 'code', code: room.code },
       { t: 'h', text: 'ניקוד הערב' },
       { t: 'players', items: board(room), kick: host },
-      { t: 'h', text: host ? 'בחרו משחק' : 'המשחקים' },
+      ...(host ? [
+        { t: 'buttons', items: [{ label: '🎲 סיגי, תגריל משחק!', act: 'random', style: 'tan', disabled: n < 2 }] },
+        { t: 'toggle', act: 'randommode', on: room.randomMode, label: 'הגרלה לכל הערב', sub: 'אחרי כל משחק סיגי מגריל את הבא, בלי לחזור על משחקים' },
+      ] : room.randomMode ? [{ t: 'text', text: '🎲 מצב הגרלה: סיגי מגריל משחק אחרי משחק', muted: true }] : []),
+      { t: 'h', text: host ? 'או בחרו בעצמכם' : 'המשחקים' },
       { t: 'games', enabled: host, n, items: Object.values(GAMES).map(G => ({ id: G.id, name: G.name, icon: G.icon, min: G.min, max: G.max })) },
       ...(host && room.gamesPlayed ? [{ t: 'buttons', items: [{ label: '🏆 סיום הערב והכתרת אלוף', act: 'endnight', style: 'ember' }] }] : []),
     ] };
@@ -144,7 +166,10 @@ function viewFor(room, pid) {
       { t: 'say', text: a.note },
       { t: 'h', text: 'נקודות ערב מהמשחק' },
       { t: 'players', items: rows },
-      host ? { t: 'buttons', items: [{ label: 'לטבלה ולמשחק הבא', act: 'tolobby', style: 'main' }] } : { t: 'text', text: 'מחכים שהמארח ימשיך…', muted: true },
+      host ? { t: 'buttons', items: room.randomMode
+        ? [{ label: '🎲 הגרלת המשחק הבא', act: 'nextrandom', style: 'main' }, { label: 'לטבלה', act: 'tolobby', style: 'ghost' }]
+        : [{ label: 'לטבלה ולמשחק הבא', act: 'tolobby', style: 'main' }] }
+        : { t: 'text', text: room.randomMode ? 'מחכים שהמארח יגריל את המשחק הבא…' : 'מחכים שהמארח ימשיך…', muted: true },
     ] };
   }
   if (room.screen === 'end') {
@@ -230,11 +255,17 @@ function handle(ws, msg) {
   if (type !== 'act') return;
   const act = msg.act;
   // room-level actions (host)
-  if (act === 'pick' && host && room.screen === 'lobby') { startGame(room, msg.id); return broadcast(room); }
+  if (act === 'pick' && host && room.screen === 'lobby') { if (startGame(room, msg.id)) room.rolled = null; return broadcast(room); }
+  if (act === 'random' && host && room.screen === 'lobby') { if (!startRandom(room)) send(ws, { type: 'error', msg: 'אין משחק שמתאים למספר השחקנים המחוברים.' }); return broadcast(room); }
+  if (act === 'randommode' && host && room.screen === 'lobby') { room.randomMode = !room.randomMode; return broadcast(room); }
+  if (act === 'nextrandom' && host && room.screen === 'award') {
+    if (!startRandom(room)) { room.screen = 'lobby'; send(ws, { type: 'error', msg: 'אין משחק שמתאים למספר השחקנים המחוברים.' }); }
+    return broadcast(room);
+  }
   if (act === 'tolobby' && host) { clearTimers(room); room.game = null; room.screen = 'lobby'; return broadcast(room); }
   if (act === 'quit' && host && room.screen === 'game') { clearTimers(room); room.game = null; room.screen = 'lobby'; return broadcast(room); }
   if (act === 'endnight' && host && room.gamesPlayed) { room.screen = 'end'; return broadcast(room); }
-  if (act === 'newnight' && host) { for (const id in room.scores) room.scores[id] = 0; room.gamesPlayed = 0; room.screen = 'lobby'; return broadcast(room); }
+  if (act === 'newnight' && host) { for (const id in room.scores) room.scores[id] = 0; room.gamesPlayed = 0; room.played = []; room.rolled = null; room.screen = 'lobby'; return broadcast(room); }
   if (act === 'kick' && host && msg.id !== pid && room.screen !== 'game') {
     const k = P(room, msg.id);
     if (k) { send(k.ws, { type: 'kicked', msg: 'המארח הוציא אתכם מהחדר.' }); if (k.ws) k.ws.room = null; room.players = room.players.filter(p => p !== k); delete room.scores[k.id]; }
